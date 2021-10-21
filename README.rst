@@ -100,3 +100,45 @@ object has the following fields:
     downloaded will not have any alternative URLs registered.
 
 If a given input line is invalid, it is discarded, and a warning is emitted.
+
+
+Library Use
+===========
+
+``gamdam`` can also be used as a Python library.  It exports the following:
+
+.. code:: python
+
+    async def download(
+        repo: pathlib.Path,
+        objects: AsyncIterator[Downloadable],
+        jobs: int = 10,
+    ) -> Report
+
+Download the items yielded by the async iterator ``objects`` to the directory
+``repo`` (which must be part of a git-annex repository) and set their metadata.
+``jobs`` is the number of parallel jobs that the ``git-annex addurl`` process
+will use.
+
+.. code:: python
+
+   class Downloadable(pydantic.BaseModel):
+       path: pathlib.Path
+       url: pydantic.AnyHttpUrl
+       metadata: Optional[Dict[str, List[str]]] = None
+       extra_urls: Optional[List[pydantic.AnyHttpUrl]] = None
+
+``Downloadable`` is a pydantic_ model used to represent files to download; see
+`Input Format`_ above for the meanings of the fields.
+
+.. _pydantic: https://pydantic-docs.helpmanual.io
+
+.. code:: python
+
+    @dataclass
+    class Report:
+        downloaded: int
+        failed: int
+
+``Report`` is used as the return value of ``download()``; it contains the
+number of files successfully downloaded and the number of failed downloads.

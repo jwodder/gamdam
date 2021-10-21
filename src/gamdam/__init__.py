@@ -21,3 +21,7 @@ __author__ = "John Thorvald Wodder II"
 __author_email__ = "gamdam@varonathe.org"
 __license__ = "MIT"
 __url__ = "https://github.com/jwodder/gamdam"
+
+from .core import Downloadable, Report, download
+
+__all__ = ["Downloadable", "Report", "download"]
