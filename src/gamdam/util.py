@@ -3,9 +3,12 @@ import logging
 import os
 from pathlib import Path
 import subprocess
-from typing import Any, Callable
+from typing import Any, AsyncIterator, Callable
 import click
 from click_loglevel import LogLevel
+import trio
+from .consts import DEFAULT_JOBS
+from .core import Downloadable, download
 
 
 def ensure_annex_repo(repo: Path) -> None:
@@ -33,6 +36,14 @@ def common_options(func: Callable) -> Callable:
         help="Git Annex repository to operate in",
     )
     @click.option(
+        "-J",
+        "--jobs",
+        type=int,
+        default=DEFAULT_JOBS,
+        help="Number of jobs for `git-annex addurl` to use",
+        show_default=True,
+    )
+    @click.option(
         "-l",
         "--log-level",
         type=LogLevel(),
@@ -44,3 +55,15 @@ def common_options(func: Callable) -> Callable:
         return func(*args, **kwargs)
 
     return wrapped
+
+
+def download_to_repo(
+    objects: AsyncIterator[Downloadable], repo: Path, jobs: int = DEFAULT_JOBS
+) -> None:
+    ensure_annex_repo(repo)
+    downloaded = trio.run(download, repo, objects, jobs)
+    subprocess.run(
+        ["git", "commit", "-m", f"Downloaded {downloaded} URLs"],
+        cwd=repo,
+        check=True,
+    )

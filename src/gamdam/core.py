@@ -9,6 +9,7 @@ import sys
 from typing import AsyncIterable, AsyncIterator, Dict, List, Optional, Tuple, TypeVar
 from pydantic import AnyHttpUrl, BaseModel, validator
 import trio
+from .consts import DEFAULT_JOBS
 
 if sys.version_info[:2] >= (3, 10):
     from contextlib import aclosing
@@ -210,7 +211,7 @@ class Downloader:
 
 
 async def download(
-    repo_path: Path, objects: AsyncIterator[Downloadable], jobs: int = 10
+    repo_path: Path, objects: AsyncIterator[Downloadable], jobs: int = DEFAULT_JOBS
 ) -> int:
     async with await open_git_annex(
         "addurl",

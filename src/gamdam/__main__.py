@@ -1,24 +1,17 @@
 from pathlib import Path
-import subprocess
 from typing import AsyncIterator, TextIO
 import click
 import trio
-from .core import Downloadable, download, log
-from .util import common_options, ensure_annex_repo, init_logging
+from .core import Downloadable, log
+from .util import common_options, download_to_repo, init_logging
 
 
 @click.command()
 @common_options
 @click.argument("infile", type=click.File("r"), default="-")
-def main(repo: Path, infile: TextIO, log_level: int) -> None:
+def main(repo: Path, infile: TextIO, log_level: int, jobs: int) -> None:
     init_logging(log_level)
-    ensure_annex_repo(repo)
-    downloaded = trio.run(download, repo, readfile(infile))
-    subprocess.run(
-        ["git", "commit", "-m", f"Downloaded {downloaded} URLs"],
-        cwd=repo,
-        check=True,
-    )
+    download_to_repo(readfile(infile), repo, jobs=jobs)
 
 
 async def readfile(fp: TextIO) -> AsyncIterator[Downloadable]:

@@ -1,14 +1,13 @@
 import os.path
 from pathlib import Path
-import subprocess
 from typing import AsyncIterator, Dict, Union
 from urllib.parse import quote, urlparse
 import click
 import feedparser
 import httpx
 import trio
-from .core import Downloadable, download, log
-from .util import common_options, ensure_annex_repo, init_logging
+from .core import Downloadable, log
+from .util import common_options, download_to_repo, init_logging
 
 
 async def arxiv_articles(category: str, limit: int) -> AsyncIterator[Downloadable]:
@@ -110,32 +109,18 @@ def main() -> None:
 @click.option(
     "--limit", type=int, default=1000, help="Maximum number of items to download"
 )
-# arXiv category code
-@click.argument("category")
-def arxiv(repo: Path, category: str, limit: int, log_level: int) -> None:
+@click.argument("category")  # arXiv category code
+def arxiv(repo: Path, category: str, limit: int, log_level: int, jobs: int) -> None:
     init_logging(log_level)
-    ensure_annex_repo(repo)
-    downloaded = trio.run(download, repo, arxiv_articles(category, limit))
-    subprocess.run(
-        ["git", "commit", "-m", f"Downloaded {downloaded} URLs"],
-        cwd=repo,
-        check=True,
-    )
+    download_to_repo(arxiv_articles(category, limit), repo, jobs=jobs)
 
 
 @main.command()
 @common_options
-# MTG set code as used by Scryfall
-@click.argument("mtg-set")
-def mtg(repo: Path, mtg_set: str, log_level: int) -> None:
+@click.argument("mtg-set")  # MTG set code as used by Scryfall
+def mtg(repo: Path, mtg_set: str, log_level: int, jobs: int) -> None:
     init_logging(log_level)
-    ensure_annex_repo(repo)
-    downloaded = trio.run(download, repo, mtgimages(mtg_set))
-    subprocess.run(
-        ["git", "commit", "-m", f"Downloaded {downloaded} URLs"],
-        cwd=repo,
-        check=True,
-    )
+    download_to_repo(mtgimages(mtg_set), repo, jobs=jobs)
 
 
 if __name__ == "__main__":
