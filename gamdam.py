@@ -1,12 +1,4 @@
 from __future__ import annotations
-
-__requires__ = [
-    "click >= 8.0",
-    "feedparser ~= 6.0",
-    "httpx ~= 0.20.0",
-    "trio ~= 0.19.0",
-]
-
 from collections import deque
 from dataclasses import dataclass, field
 import feedparser
@@ -15,20 +7,45 @@ import logging
 from pathlib import Path
 import shlex
 import subprocess
-from typing import Any, AsyncIterator, Dict, List, Optional, Union
+import sys
+from typing import (
+    Any,
+    AsyncIterable,
+    AsyncIterator,
+    Dict,
+    List,
+    Optional,
+    TypeVar,
+    Union,
+)
 from urllib.parse import urlparse
 import click
 import httpx
 import trio
 
-log = logging.getLogger("arxiv-cat")
+if sys.version_info[:2] >= (3, 10):
+    from contextlib import aclosing
+else:
+    from async_generator import aclosing
+
+    T = TypeVar("T")
+
+    def aiter(obj: AsyncIterable[T]) -> AsyncIterator[T]:
+        return obj.__aiter__()
+
+    async def anext(obj: AsyncIterator[T]) -> T:
+        return await obj.__anext__()
+
+
+log = logging.getLogger("gamdam")
 
 
 @dataclass
 class Downloadable:
     path: str
     url: str
-    extra_urls: List[str]
+    metadata: Optional[Dict[str, List[str]]] = None
+    extra_urls: Optional[List[str]] = None
 
 
 @dataclass
@@ -87,25 +104,25 @@ class Downloader:
     repo_path: Path
     downloaded: int = 0
     failures: int = 0
-    paths2urls: Dict[str, List[str]] = field(init=False, default_factory=dict)
-    url_sender: trio.abc.SendChannel = field(init=False)
-    url_receiver: trio.abc.ReceiveChannel = field(init=False)
+    in_progress: Dict[str, Downloadable] = field(init=False, default_factory=dict)
+    post_sender: trio.abc.SendChannel = field(init=False)
+    post_receiver: trio.abc.ReceiveChannel = field(init=False)
 
     def __post_init__(self) -> None:
-        self.url_sender, self.url_receiver = trio.open_memory_channel(0)
+        self.post_sender, self.post_receiver = trio.open_memory_channel(0)
 
     async def feed_addurl(self, objects: AsyncIterator[Downloadable]) -> None:
         async with self.addurl.p.stdin:
             async for obj in objects:
-                if obj.path in self.paths2urls:
+                if obj.path in self.in_progress:
                     raise ValueError(f"Path {obj.path!r} downloaded to multiple times")
-                self.paths2urls[obj.path] = obj.extra_urls
+                self.in_progress[obj.path] = obj
                 log.info("Downloading %r to %r", obj.url, obj.path)
                 await self.addurl.send(f"{obj.url} {obj.path}\n")
             log.debug("Done feeding URLs to addurl")
 
     async def read_addurl(self) -> None:
-        async with self.url_sender:
+        async with self.post_sender:
             async for line in self.addurl:
                 log.debug("Line read from addurl: %s", line.rstrip("\n"))
                 data = json.loads(line)
@@ -130,22 +147,54 @@ class Downloader:
                     key = data.get("key")
                     log.info("Finished downloading %s (key = %s)", path, key)
                     self.downloaded += 1
-                    if key is not None:
-                        extra_urls = self.paths2urls.pop(path)
-                        await self.url_sender.send((key, extra_urls))
+                    dl = self.in_progress.pop(path)
+                    if dl.metadata and dl.extra_urls:
+                        await self.post_sender.send((dl, key))
             log.debug("Done reading from addurl")
 
-    async def registerurl(self) -> None:
+    async def add_metadata(self) -> None:
         async with await open_git_annex(
             "registerurl", "--batch", path=self.repo_path, capture=False
-        ) as p:
-            async with self.url_receiver:
-                async for key, extra_urls in self.url_receiver:
-                    for u in extra_urls:
-                        log.info("Registering URL %r for key %s", u, key)
-                        await p.send(f"{key} {u}\n")
-                        # log.info("URL registered")
-                log.debug("Done registering URLs")
+        ) as registerurl:
+            async with await open_git_annex(
+                "metadata",
+                "--batch",
+                "--json",
+                "--json-error-messages",
+                path=self.repo_path,
+            ) as metadata:
+                async with aclosing(aiter(metadata)) as mdout:
+                    async with self.post_receiver:
+                        async for dl, key in self.post_receiver:
+                            if dl.metadata:
+                                log.debug(
+                                    "Sending metadata for %s to git-annex: %r",
+                                    dl.path,
+                                    dl.metadata,
+                                )
+                                await metadata.send(
+                                    json.dumps({"file": dl.path, "fields": dl.metadata})
+                                    + "\n"
+                                )
+                                data = json.loads(await anext(mdout))
+                                log.debug(
+                                    "Response received from `git-annex metadata`: %r",
+                                    data,
+                                )
+                                if not data["success"]:
+                                    log.error(
+                                        "%s: setting metadata failed;"
+                                        " error messages: %r",
+                                        dl.path,
+                                        data["error-messages"],
+                                    )
+                                else:
+                                    log.info("Set metadata on %s", dl.path)
+                            for u in dl.extra_urls or []:
+                                log.info("Registering URL %r for %s", u, dl.path)
+                                await registerurl.send(f"{key} {u}\n")
+                                # log.info("URL registered")
+                        log.debug("Done post-processing metadata")
 
 
 async def download(
@@ -167,7 +216,7 @@ async def download(
         async with trio.open_nursery() as nursery:
             nursery.start_soon(dm.feed_addurl, objects)
             nursery.start_soon(dm.read_addurl)
-            nursery.start_soon(dm.registerurl)
+            nursery.start_soon(dm.add_metadata)
     log.info("Downloaded %d files", dm.downloaded)
     if dm.failures:
         # log.error("%d files failed to download", dm.failures)
@@ -215,7 +264,20 @@ async def aiterarxiv(category: str, limit: int) -> AsyncIterator[Downloadable]:
                 except ValueError:
                     log.warning("Could not determine PDF download link for %s", e.id)
                     continue
-                yield Downloadable(path=path, url=pdflink, extra_urls=[e.id])
+                metadata = {
+                    "url": [e.id],
+                    "title": [e.title],
+                    "published": [e.published],
+                    "updated": [e.updated],
+                    "category": [e.arxiv_primary_category["term"]],
+                }
+                try:
+                    metadata["doi"] = [e.arxiv_doi]
+                except AttributeError:
+                    pass
+                yield Downloadable(
+                    path=path, url=pdflink, metadata=metadata, extra_urls=[e.id]
+                )
             if start + PER_PAGE < limit:
                 await trio.sleep(INTER_API_SLEEP)
         log.info("Done fetching arXiv entries")
