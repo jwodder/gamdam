@@ -110,17 +110,23 @@ def main() -> None:
     "--limit", type=int, default=1000, help="Maximum number of items to download"
 )
 @click.argument("category")  # arXiv category code
-def arxiv(repo: Path, category: str, limit: int, log_level: int, jobs: int) -> None:
+@click.pass_context
+def arxiv(
+    ctx: click.Context, repo: Path, category: str, limit: int, log_level: int, jobs: int
+) -> None:
     init_logging(log_level)
-    download_to_repo(arxiv_articles(category, limit), repo, jobs=jobs)
+    download_to_repo(ctx, arxiv_articles(category, limit), repo, jobs=jobs)
 
 
 @main.command()
 @common_options
 @click.argument("mtg-set")  # MTG set code as used by Scryfall
-def mtg(repo: Path, mtg_set: str, log_level: int, jobs: int) -> None:
+@click.pass_context
+def mtg(
+    ctx: click.Context, repo: Path, mtg_set: str, log_level: int, jobs: int
+) -> None:
     init_logging(log_level)
-    download_to_repo(mtgimages(mtg_set), repo, jobs=jobs)
+    download_to_repo(ctx, mtgimages(mtg_set), repo, jobs=jobs)
 
 
 if __name__ == "__main__":

@@ -9,9 +9,12 @@ from .util import common_options, download_to_repo, init_logging
 @click.command()
 @common_options
 @click.argument("infile", type=click.File("r"), default="-")
-def main(repo: Path, infile: TextIO, log_level: int, jobs: int) -> None:
+@click.pass_context
+def main(
+    ctx: click.Context, repo: Path, infile: TextIO, log_level: int, jobs: int
+) -> None:
     init_logging(log_level)
-    download_to_repo(readfile(infile), repo, jobs=jobs)
+    download_to_repo(ctx, readfile(infile), repo, jobs=jobs)
 
 
 async def readfile(fp: TextIO) -> AsyncIterator[Downloadable]:

@@ -42,6 +42,12 @@ class Downloadable(BaseModel):
 
 
 @dataclass
+class Report:
+    downloaded: int = 0
+    failed: int = 0
+
+
+@dataclass
 class TextProcess(trio.abc.AsyncResource):
     p: trio.Process
     name: str
@@ -79,8 +85,7 @@ class TextProcess(trio.abc.AsyncResource):
 class Downloader:
     addurl: TextProcess
     repo: Path
-    downloaded: int = 0
-    failures: int = 0
+    report: Report = field(init=False, default_factory=Report)
     in_progress: Dict[str, Downloadable] = field(init=False, default_factory=dict)
     post_sender: trio.abc.SendChannel = field(init=False)
     post_receiver: trio.abc.ReceiveChannel = field(init=False)
@@ -120,12 +125,12 @@ class Downloader:
                         data["file"],
                         data["error-messages"],
                     )
-                    self.failures += 1
+                    self.report.failed += 1
                 else:
                     path = data["file"]
                     key = data.get("key")
                     log.info("Finished downloading %s (key = %s)", path, key)
-                    self.downloaded += 1
+                    self.report.downloaded += 1
                     dl = self.in_progress.pop(path)
                     if dl.metadata or dl.extra_urls:
                         await self.post_sender.send((dl, key))
@@ -183,7 +188,7 @@ class Downloader:
 
 async def download(
     repo: Path, objects: AsyncIterator[Downloadable], jobs: int = DEFAULT_JOBS
-) -> int:
+) -> Report:
     async with await open_git_annex(
         "addurl",
         "--batch",
@@ -201,11 +206,10 @@ async def download(
             nursery.start_soon(dm.feed_addurl, objects)
             nursery.start_soon(dm.read_addurl)
             nursery.start_soon(dm.add_metadata)
-    log.info("Downloaded %d files", dm.downloaded)
-    if dm.failures:
-        # log.error("%d files failed to download", dm.failures)
-        raise RuntimeError(f"{dm.failures} files failed to download")
-    return dm.downloaded
+    log.info("Downloaded %d files", dm.report.downloaded)
+    if dm.report.failed:
+        log.error("%d files failed to download", dm.report.failed)
+    return dm.report
 
 
 async def open_git_annex(

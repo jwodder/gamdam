@@ -58,12 +58,18 @@ def common_options(func: Callable) -> Callable:
 
 
 def download_to_repo(
-    objects: AsyncIterator[Downloadable], repo: Path, jobs: int = DEFAULT_JOBS
+    ctx: click.Context,
+    objects: AsyncIterator[Downloadable],
+    repo: Path,
+    jobs: int = DEFAULT_JOBS,
 ) -> None:
     ensure_annex_repo(repo)
-    downloaded = trio.run(download, repo, objects, jobs)
-    subprocess.run(
-        ["git", "commit", "-m", f"Downloaded {downloaded} URLs"],
-        cwd=repo,
-        check=True,
-    )
+    report = trio.run(download, repo, objects, jobs)
+    if report.downloaded:
+        subprocess.run(
+            ["git", "commit", "-m", f"Downloaded {report.downloaded} URLs"],
+            cwd=repo,
+            check=True,
+        )
+    if report.failed:
+        ctx.exit(1)
