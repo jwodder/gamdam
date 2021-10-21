@@ -87,8 +87,12 @@ class Downloader:
     repo: Path
     report: Report = field(init=False, default_factory=Report)
     in_progress: Dict[str, Downloadable] = field(init=False, default_factory=dict)
-    post_sender: trio.abc.SendChannel = field(init=False)
-    post_receiver: trio.abc.ReceiveChannel = field(init=False)
+    post_sender: trio.abc.SendChannel[Tuple[Downloadable, Optional[str]]] = field(
+        init=False
+    )
+    post_receiver: trio.abc.ReceiveChannel[Tuple[Downloadable, Optional[str]]] = field(
+        init=False
+    )
 
     def __post_init__(self) -> None:
         self.post_sender, self.post_receiver = trio.open_memory_channel(0)
