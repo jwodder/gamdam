@@ -84,11 +84,26 @@ async def mtgimages(set_id: str) -> AsyncIterator[Downloadable]:
                     image_url = c["card_faces"][0]["image_uris"]["normal"]
                 urlbits = urlparse(image_url)
                 _, ext = os.path.splitext(urlbits.path)
+                metadata = {
+                    "scryfall_id": [c["id"]],
+                    "oracle_id": [c["oracle_id"]],
+                    "name": [c["name"]],
+                    "set": [c["set"]],
+                    "collector_number": [c["collector_number"]],
+                    "scryfall_uris": [
+                        c["uri"],
+                        c["scryfall_uri"],
+                        c["scryfall_set_uri"],
+                    ],
+                }
+                try:
+                    metadata["gatherer_uri"] = [c["related_uris"]["gatherer"]]
+                except KeyError:
+                    pass
                 yield Downloadable(
                     path=f"{c['collector_number']}-{quote(c['name'], safe='')}{ext}",
                     url=image_url,
-                    ### TODO: Add more metadata and URLs
-                    metadata={"id": [c["id"]]},
+                    metadata=metadata,
                     extra_urls=None,
                 )
             if (next_url := data.get("next_page")) is not None:
