@@ -48,10 +48,11 @@ finished downloading, it attaches any listed metadata and extra URLs using
 Options
 -------
 
--C DIR, --chdir DIR             The root of the git-annex repository to operate
-                                in; defaults to the current directory.  If the
-                                given directory does not appear to be the root
-                                of a git-annex repository, it is initialized as
+-C DIR, --chdir DIR             The directory in which to download files;
+                                defaults to the current directory.  If the
+                                directory does not exist, it will be created.
+                                If the directory does not belong to a Git or
+                                git-annex repository, it will be initialized as
                                 one.
 
 -J INT, --jobs INT              Number of parallel jobs for ``git-annex
@@ -61,7 +62,7 @@ Options
                                 values are "``CRITICAL``", "``ERROR``",
                                 "``WARNING``", "``INFO``", "``DEBUG``" (all
                                 case-insensitive) and their Python integer
-                                equivalents.  [default value: INFO]
+                                equivalents.  [default: INFO]
 
 
 Input Format
@@ -74,17 +75,19 @@ object has the following fields:
     *(required)* A URL to download
 
 ``path``
-    *(required)* A path relative to the root of the git-annex repository where
-    the contents of the URL should be saved.  If multiple input entries target
-    the same path, all entries after the first will be discarded.
+    *(required)* A relative path where the contents of the URL should be saved.
+    If multiple input entries target the same path, all entries after the first
+    will be discarded, and a warning will be emitted.
 
 ``metadata``
     A collection of metadata in the form used by ``git-annex metadata``, i.e.,
     a ``dict`` mapping key names to lists of string values.
 
 ``extra_urls``
-    A list of alternative URLs for the resource to be attached to the
+    A list of alternative URLs for the resource, to be attached to the
     downloaded file with ``git-annex registerurl``.  Note that this operation
     can only be performed on files tracked by git-annex; if you, say, have
     configured git-annex to not track text files, then any text files
     downloaded will not have any alternative URLs registered.
+
+If a given input line is invalid, it is discarded, and a warning is emitted.

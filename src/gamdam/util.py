@@ -8,13 +8,33 @@ import click
 from click_loglevel import LogLevel
 import trio
 from .consts import DEFAULT_JOBS
-from .core import Downloadable, download
+from .core import Downloadable, download, log
 
 
 def ensure_annex_repo(repo: Path) -> None:
-    if not (repo / ".git").exists():
+    repo.mkdir(parents=True, exist_ok=True)
+    r = subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"],
+        cwd=repo,
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    if r.returncode == 0:
+        assert isinstance(r.stdout, str)
+        repo = Path(r.stdout.strip())
+    else:
+        log.info("Directory is not a Git repository; initializing ...")
         subprocess.run(["git", "init", repo], check=True)
-    if not (repo / ".git" / "annex").exists():
+    r = subprocess.run(
+        ["git", "rev-parse", "--git-dir"],
+        cwd=repo,
+        stdout=subprocess.PIPE,
+        text=True,
+        check=True,
+    )
+    assert isinstance(r.stdout, str)
+    if not Path(r.stdout.strip(), "annex").exists():
+        log.info("Repository is not a git-annex repository; initializing ...")
         subprocess.run(["git-annex", "init"], cwd=repo, check=True)
 
 
