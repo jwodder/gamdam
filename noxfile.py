@@ -7,7 +7,7 @@ nox.options.sessions = ["run"]  # default session
 @nox.session
 def run(session):
     session.install("-r", "requirements.txt")
-    session.run("gamdam.py", *session.posargs)
+    session.run("python", "gamdam.py", *session.posargs)
 
 
 @nox.session
