@@ -1,5 +1,4 @@
 from __future__ import annotations
-from collections import deque
 from dataclasses import dataclass, field
 import json
 import logging
@@ -7,7 +6,16 @@ from pathlib import Path
 import shlex
 import subprocess
 import sys
-from typing import Any, AsyncIterable, AsyncIterator, Dict, List, Optional, TypeVar
+from typing import (
+    Any,
+    AsyncIterable,
+    AsyncIterator,
+    Dict,
+    List,
+    Optional,
+    Tuple,
+    TypeVar,
+)
 from pydantic import AnyHttpUrl, BaseModel
 import trio
 
@@ -61,15 +69,29 @@ class TextProcess:
         buff = b""
         assert self.p.stdout is not None
         async for blob in self.p.stdout:
-            lines = deque((buff + blob).splitlines(True))
-            ### PROBLEM: This will break if splitlines() encounters a line
-            ### ending in \r
-            while lines and lines[0].endswith(b"\n"):
-                yield lines.popleft().decode(self.encoding)
-            buff = b"".join(lines)
+            lines, buff = split_unix_lines(buff + blob)
+            for ln in lines:
+                yield ln.decode(self.encoding)
         if buff:
-            for line in buff.splitlines(True):
-                yield line.decode(self.encoding)
+            lines, buff = split_unix_lines(buff)
+            for ln in lines:
+                yield ln.decode(self.encoding)
+            if buff:
+                yield buff.decode(self.encoding)
+
+
+# We can't use splitlines() because it splits on \r, but we only want to split
+# on \n.
+def split_unix_lines(bs: bytes) -> Tuple[List[bytes], bytes]:
+    lines: List[bytes] = []
+    while True:
+        try:
+            i = bs.index(b"\n")
+        except ValueError:
+            break
+        lines.append(bs[: i + 1])
+        bs = bs[i + 1 :]
+    return lines, bs
 
 
 async def open_git_annex(
