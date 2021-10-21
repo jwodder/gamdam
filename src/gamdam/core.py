@@ -136,6 +136,7 @@ class Downloader:
                         textwrap.indent("".join(data["error-messages"]), " " * 4),
                     )
                     self.report.failed += 1
+                    self.in_progress.pop(data["file"])
                 else:
                     path = data["file"]
                     key = data.get("key")
