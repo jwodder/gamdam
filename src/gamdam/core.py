@@ -1,7 +1,6 @@
 from __future__ import annotations
 from collections import deque
 from dataclasses import dataclass, field
-import feedparser
 import json
 import logging
 from pathlib import Path
@@ -19,7 +18,7 @@ from typing import (
     Union,
 )
 from urllib.parse import urlparse
-import click
+import feedparser
 import httpx
 import trio
 
@@ -169,7 +168,9 @@ class Downloader:
                 # The `ignore` can be removed once
                 # <https://github.com/python-trio/trio-typing/pull/41> is
                 # released.
-                async with aclosing(aiter(metadata)) as mdout:  # typing: ignore[type-var]
+                async with aclosing(
+                    aiter(metadata)
+                ) as mdout:  # typing: ignore[type-var]
                     async with self.post_receiver:
                         async for dl, key in self.post_receiver:
                             if dl.metadata:
@@ -287,32 +288,3 @@ async def aiterarxiv(category: str, limit: int) -> AsyncIterator[Downloadable]:
             if start + PER_PAGE < limit:
                 await trio.sleep(INTER_API_SLEEP)
         log.info("Done fetching arXiv entries")
-
-
-@click.command()
-@click.option(
-    "--limit", type=int, default=1000, help="Maximum number of items to download"
-)
-# Path to a git-annex repository; will be created if it does not already exist
-@click.argument("repo", type=click.Path(file_okay=False, path_type=Path))
-# arXiv category code
-@click.argument("category")
-def main(repo: Path, category: str, limit: int) -> None:
-    logging.basicConfig(
-        format="%(asctime)s [%(levelname)-8s] %(name)s %(message)s",
-        datefmt="%H:%M:%S%z",
-        level=logging.DEBUG,
-    )
-    if not repo.exists():
-        subprocess.run(["git", "init", repo], check=True)
-        subprocess.run(["git-annex", "init"], cwd=repo, check=True)
-    downloaded = trio.run(download, repo, aiterarxiv(category, limit))
-    subprocess.run(
-        ["git", "commit", "-m", f"Downloaded {downloaded} URLs"],
-        cwd=repo,
-        check=True,
-    )
-
-
-if __name__ == "__main__":
-    main()
