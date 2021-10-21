@@ -1,5 +1,4 @@
 import os.path
-from pathlib import Path
 from typing import AsyncIterator, Dict, Union
 from urllib.parse import quote, urlparse
 import click
@@ -7,7 +6,7 @@ import feedparser
 import httpx
 import trio
 from .core import Downloadable, log
-from .util import common_options, download_to_repo, init_logging
+from .util import download_to_repo
 
 
 async def arxiv_articles(category: str, limit: int) -> AsyncIterator[Downloadable]:
@@ -120,50 +119,20 @@ def main() -> None:
 
 
 @main.command()
-@common_options
+@download_to_repo
 @click.option(
     "--limit", type=int, default=1000, help="Maximum number of items to download"
 )
 @click.argument("category")  # arXiv category code
-@click.pass_context
-def arxiv(
-    ctx: click.Context,
-    repo: Path,
-    category: str,
-    limit: int,
-    log_level: int,
-    jobs: int,
-    save: bool,
-    message: str,
-) -> None:
-    init_logging(log_level)
-    download_to_repo(
-        ctx,
-        arxiv_articles(category, limit),
-        repo,
-        jobs=jobs,
-        save=save,
-        message=message,
-    )
+def arxiv(category: str, limit: int) -> AsyncIterator[Downloadable]:
+    return arxiv_articles(category, limit)
 
 
 @main.command()
-@common_options
+@download_to_repo
 @click.argument("mtg-set")  # MTG set code as used by Scryfall
-@click.pass_context
-def mtg(
-    ctx: click.Context,
-    repo: Path,
-    mtg_set: str,
-    log_level: int,
-    jobs: int,
-    save: bool,
-    message: str,
-) -> None:
-    init_logging(log_level)
-    download_to_repo(
-        ctx, mtgimages(mtg_set), repo, jobs=jobs, save=save, message=message
-    )
+def mtg(mtg_set: str) -> AsyncIterator[Downloadable]:
+    return mtgimages(mtg_set)
 
 
 if __name__ == "__main__":

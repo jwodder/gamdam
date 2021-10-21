@@ -46,7 +46,12 @@ def init_logging(log_level: int = logging.INFO) -> None:
     )
 
 
-def common_options(func: Callable) -> Callable:
+def formattable(s: str) -> str:
+    s.format(downloaded=42)  # Raises a ValueError if not formattable
+    return s
+
+
+def download_to_repo(func: Callable[..., AsyncIterator[Downloadable]]) -> Callable:
     @click.option(
         "-C",
         "--chdir",
@@ -83,33 +88,28 @@ def common_options(func: Callable) -> Callable:
         default=True,
         help="Whether to commit the downloaded files when done  [default: --save]",
     )
+    @click.pass_context
     @wraps(func)
-    def wrapped(*args: Any, **kwargs: Any) -> Any:
-        return func(*args, **kwargs)
+    def wrapped(
+        ctx: click.Context,
+        repo: Path,
+        log_level: int,
+        jobs: int,
+        save: bool,
+        message: str,
+        **kwargs: Any
+    ) -> None:
+        init_logging(log_level)
+        objects = func(**kwargs)
+        ensure_annex_repo(repo)
+        report = trio.run(download, repo, objects, jobs)
+        if report.downloaded and save:
+            subprocess.run(
+                ["git", "commit", "-m", message.format(downloaded=report.downloaded)],
+                cwd=repo,
+                check=True,
+            )
+        if report.failed:
+            ctx.exit(1)
 
     return wrapped
-
-
-def formattable(s: str) -> str:
-    s.format(downloaded=42)  # Raises a ValueError if not formattable
-    return s
-
-
-def download_to_repo(
-    ctx: click.Context,
-    objects: AsyncIterator[Downloadable],
-    repo: Path,
-    message: str,
-    jobs: int = DEFAULT_JOBS,
-    save: bool = True,
-) -> None:
-    ensure_annex_repo(repo)
-    report = trio.run(download, repo, objects, jobs)
-    if report.downloaded and save:
-        subprocess.run(
-            ["git", "commit", "-m", message.format(downloaded=report.downloaded)],
-            cwd=repo,
-            check=True,
-        )
-    if report.failed:
-        ctx.exit(1)
