@@ -14,4 +14,4 @@ def run(session):
 def typing(session):
     session.install(".")
     session.install("mypy", "trio-typing[mypy]")
-    session.run("mypy", *session.posargs, "gamdam")
+    session.run("mypy", *session.posargs, "src")

@@ -165,12 +165,10 @@ class Downloader:
                 "--json-error-messages",
                 path=self.repo_path,
             ) as metadata:
-                # The `ignore` can be removed once
+                # The "type: ignore" can be removed once
                 # <https://github.com/python-trio/trio-typing/pull/41> is
                 # released.
-                async with aclosing(
-                    aiter(metadata)
-                ) as mdout:  # typing: ignore[type-var]
+                async with aclosing(aiter(metadata)) as mdout:  # type: ignore[type-var]
                     async with self.post_receiver:
                         async for dl, key in self.post_receiver:
                             if dl.metadata:
