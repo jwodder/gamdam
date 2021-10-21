@@ -7,7 +7,7 @@ import shlex
 import subprocess
 import sys
 from typing import AsyncIterable, AsyncIterator, Dict, List, Optional, Tuple, TypeVar
-from pydantic import AnyHttpUrl, BaseModel
+from pydantic import AnyHttpUrl, BaseModel, validator
 import trio
 
 if sys.version_info[:2] >= (3, 10):
@@ -32,6 +32,12 @@ class Downloadable(BaseModel):
     url: AnyHttpUrl
     metadata: Optional[Dict[str, List[str]]] = None
     extra_urls: Optional[List[str]] = None
+
+    @validator("path")
+    def _no_abs_path(cls, v: Path) -> Path:  # noqa: B902, U100
+        if v.is_absolute():
+            raise ValueError("Download target paths cannot be absolute")
+        return v
 
 
 @dataclass
