@@ -32,7 +32,7 @@ class Downloadable(BaseModel):
     path: Path
     url: AnyHttpUrl
     metadata: Optional[Dict[str, List[str]]] = None
-    extra_urls: Optional[List[str]] = None
+    extra_urls: Optional[List[AnyHttpUrl]] = None
 
     @validator("path")
     def _no_abs_path(cls, v: Path) -> Path:  # noqa: B902, U100
