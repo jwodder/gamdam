@@ -132,7 +132,7 @@ class Downloader:
                     log.info("Finished downloading %s (key = %s)", path, key)
                     self.report.downloaded += 1
                     dl = self.in_progress.pop(path)
-                    if dl.metadata or dl.extra_urls:
+                    if dl.metadata or (dl.extra_urls and key is not None):
                         await self.post_sender.send((dl, key))
             log.debug("Done reading from addurl")
 
@@ -179,10 +179,10 @@ class Downloader:
                                     )
                                 else:
                                     log.info("Set metadata on %s", dl.path)
-                            for u in dl.extra_urls or []:
-                                log.info("Registering URL %r for %s", u, dl.path)
-                                await registerurl.send(f"{key} {u}\n")
-                                # log.info("URL registered")
+                            if key is not None:
+                                for u in dl.extra_urls or []:
+                                    log.info("Registering URL %r for %s", u, dl.path)
+                                    await registerurl.send(f"{key} {u}\n")
                         log.debug("Done post-processing metadata")
 
 
