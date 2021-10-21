@@ -6,6 +6,7 @@ from pathlib import Path
 import shlex
 import subprocess
 import sys
+import textwrap
 from typing import AsyncIterable, AsyncIterator, Dict, List, Optional, Tuple, TypeVar
 from pydantic import AnyHttpUrl, BaseModel, validator
 import trio
@@ -129,9 +130,9 @@ class Downloader:
                     )
                 elif not data["success"]:
                     log.error(
-                        "%s: download failed; error messages: %r",
+                        "%s: download failed; error messages:\n\n%s",
                         data["file"],
-                        data["error-messages"],
+                        textwrap.indent("".join(data["error-messages"]), " " * 4),
                     )
                     self.report.failed += 1
                 else:
@@ -172,9 +173,11 @@ class Downloader:
                                 if not data["success"]:
                                     log.error(
                                         "%s: setting metadata failed;"
-                                        " error messages: %r",
+                                        " error messages:\n\n%s",
                                         dl.path,
-                                        data["error-messages"],
+                                        textwrap.indent(
+                                            "".join(data["error-messages"]), " " * 4
+                                        ),
                                     )
                                 else:
                                     log.info("Set metadata on %s", dl.path)
