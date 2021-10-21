@@ -9,6 +9,7 @@ import feedparser
 import httpx
 import trio
 from .core import Downloadable, download, log
+from .util import ensure_annex_repo
 
 
 async def arxiv_articles(category: str, limit: int) -> AsyncIterator[Downloadable]:
@@ -111,16 +112,20 @@ def main() -> None:
 
 @main.command()
 @click.option(
+    "-C",
+    "--chdir",
+    "repo",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=os.curdir,
+    help="Git Annex repository to operate in",
+)
+@click.option(
     "--limit", type=int, default=1000, help="Maximum number of items to download"
 )
-# Path to a git-annex repository; will be created if it does not already exist
-@click.argument("repo", type=click.Path(file_okay=False, path_type=Path))
 # arXiv category code
 @click.argument("category")
 def arxiv(repo: Path, category: str, limit: int) -> None:
-    if not repo.exists():
-        subprocess.run(["git", "init", repo], check=True)
-        subprocess.run(["git-annex", "init"], cwd=repo, check=True)
+    ensure_annex_repo(repo)
     downloaded = trio.run(download, repo, arxiv_articles(category, limit))
     subprocess.run(
         ["git", "commit", "-m", f"Downloaded {downloaded} URLs"],
@@ -130,14 +135,18 @@ def arxiv(repo: Path, category: str, limit: int) -> None:
 
 
 @main.command()
-# Path to a git-annex repository; will be created if it does not already exist
-@click.argument("repo", type=click.Path(file_okay=False, path_type=Path))
+@click.option(
+    "-C",
+    "--chdir",
+    "repo",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=os.curdir,
+    help="Git Annex repository to operate in",
+)
 # MTG set code as used by Scryfall
 @click.argument("mtg-set")
 def mtg(repo: Path, mtg_set: str) -> None:
-    if not repo.exists():
-        subprocess.run(["git", "init", repo], check=True)
-        subprocess.run(["git-annex", "init"], cwd=repo, check=True)
+    ensure_annex_repo(repo)
     downloaded = trio.run(download, repo, mtgimages(mtg_set))
     subprocess.run(
         ["git", "commit", "-m", f"Downloaded {downloaded} URLs"],
