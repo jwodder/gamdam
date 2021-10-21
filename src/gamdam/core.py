@@ -75,39 +75,10 @@ class TextProcess(trio.abc.AsyncResource):
                 yield buff.decode(self.encoding)
 
 
-# We can't use splitlines() because it splits on \r, but we only want to split
-# on \n.
-def split_unix_lines(bs: bytes) -> Tuple[List[bytes], bytes]:
-    lines: List[bytes] = []
-    while True:
-        try:
-            i = bs.index(b"\n")
-        except ValueError:
-            break
-        lines.append(bs[: i + 1])
-        bs = bs[i + 1 :]
-    return lines, bs
-
-
-async def open_git_annex(
-    *args: str, path: Optional[Path] = None, capture: bool = True
-) -> TextProcess:
-    # Note: The syntax for starting an interactable process will change in trio
-    # 0.20.0.
-    log.debug("Running git-annex %s", shlex.join(args))
-    p = await trio.open_process(
-        ["git-annex", *args],
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE if capture else None,
-        cwd=str(path),  # trio-typing says this has to be a string.
-    )
-    return TextProcess(p, name=args[0])
-
-
 @dataclass
 class Downloader:
     addurl: TextProcess
-    repo_path: Path
+    repo: Path
     downloaded: int = 0
     failures: int = 0
     in_progress: Dict[str, Downloadable] = field(init=False, default_factory=dict)
@@ -162,14 +133,14 @@ class Downloader:
 
     async def add_metadata(self) -> None:
         async with await open_git_annex(
-            "registerurl", "--batch", path=self.repo_path, capture=False
+            "registerurl", "--batch", path=self.repo, capture=False
         ) as registerurl:
             async with await open_git_annex(
                 "metadata",
                 "--batch",
                 "--json",
                 "--json-error-messages",
-                path=self.repo_path,
+                path=self.repo,
             ) as metadata:
                 # The "type: ignore" can be removed once
                 # <https://github.com/python-trio/trio-typing/pull/41> is
@@ -211,7 +182,7 @@ class Downloader:
 
 
 async def download(
-    repo_path: Path, objects: AsyncIterator[Downloadable], jobs: int = DEFAULT_JOBS
+    repo: Path, objects: AsyncIterator[Downloadable], jobs: int = DEFAULT_JOBS
 ) -> int:
     async with await open_git_annex(
         "addurl",
@@ -223,9 +194,9 @@ async def download(
         "--json-error-messages",
         "--json-progress",
         "--raw",
-        path=repo_path,
+        path=repo,
     ) as p:
-        dm = Downloader(p, repo_path)
+        dm = Downloader(p, repo)
         async with trio.open_nursery() as nursery:
             nursery.start_soon(dm.feed_addurl, objects)
             nursery.start_soon(dm.read_addurl)
@@ -235,3 +206,32 @@ async def download(
         # log.error("%d files failed to download", dm.failures)
         raise RuntimeError(f"{dm.failures} files failed to download")
     return dm.downloaded
+
+
+async def open_git_annex(
+    *args: str, path: Optional[Path] = None, capture: bool = True
+) -> TextProcess:
+    # Note: The syntax for starting an interactable process will change in trio
+    # 0.20.0.
+    log.debug("Running git-annex %s", shlex.join(args))
+    p = await trio.open_process(
+        ["git-annex", *args],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE if capture else None,
+        cwd=str(path),  # trio-typing says this has to be a string.
+    )
+    return TextProcess(p, name=args[0])
+
+
+# We can't use splitlines() because it splits on \r, but we only want to split
+# on \n.
+def split_unix_lines(bs: bytes) -> Tuple[List[bytes], bytes]:
+    lines: List[bytes] = []
+    while True:
+        try:
+            i = bs.index(b"\n")
+        except ValueError:
+            break
+        lines.append(bs[: i + 1])
+        bs = bs[i + 1 :]
+    return lines, bs
