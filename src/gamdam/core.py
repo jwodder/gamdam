@@ -6,16 +6,7 @@ from pathlib import Path
 import shlex
 import subprocess
 import sys
-from typing import (
-    Any,
-    AsyncIterable,
-    AsyncIterator,
-    Dict,
-    List,
-    Optional,
-    Tuple,
-    TypeVar,
-)
+from typing import AsyncIterable, AsyncIterator, Dict, List, Optional, Tuple, TypeVar
 from pydantic import AnyHttpUrl, BaseModel
 import trio
 
@@ -44,7 +35,7 @@ class Downloadable(BaseModel):
 
 
 @dataclass
-class TextProcess:
+class TextProcess(trio.abc.AsyncResource):
     p: trio.Process
     name: str
     encoding: str = "utf-8"
@@ -53,10 +44,7 @@ class TextProcess:
         assert self.p.stdin is not None
         await self.p.stdin.send_all(s.encode(self.encoding))
 
-    async def __aenter__(self) -> TextProcess:
-        return self
-
-    async def __aexit__(self, *_exc: Any) -> None:
+    async def aclose(self) -> None:
         await self.p.aclose()
         if self.p.returncode not in (None, 0):
             log.warning(
