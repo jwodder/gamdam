@@ -34,7 +34,8 @@ async def readfile(fp: TextIO) -> AsyncIterator[Downloadable]:
                 dl = Downloadable.parse_raw(line)
             except ValueError:
                 log.error("Invalid input line: %r; discarding", line)
-            yield dl
+            else:
+                yield dl
 
 
 if __name__ == "__main__":
