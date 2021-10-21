@@ -7,19 +7,8 @@ from pathlib import Path
 import shlex
 import subprocess
 import sys
-from typing import (
-    Any,
-    AsyncIterable,
-    AsyncIterator,
-    Dict,
-    List,
-    Optional,
-    TypeVar,
-    Union,
-)
-from urllib.parse import urlparse
-import feedparser
-import httpx
+from typing import Any, AsyncIterable, AsyncIterator, Dict, List, Optional, TypeVar
+from pydantic import AnyHttpUrl, BaseModel
 import trio
 
 if sys.version_info[:2] >= (3, 10):
@@ -39,10 +28,9 @@ else:
 log = logging.getLogger("gamdam")
 
 
-@dataclass
-class Downloadable:
-    path: str
-    url: str
+class Downloadable(BaseModel):
+    path: Path
+    url: AnyHttpUrl
     metadata: Optional[Dict[str, List[str]]] = None
     extra_urls: Optional[List[str]] = None
 
@@ -116,11 +104,12 @@ class Downloader:
         assert self.addurl.p.stdin is not None
         async with self.addurl.p.stdin:
             async for obj in objects:
-                if obj.path in self.in_progress:
-                    raise ValueError(f"Path {obj.path!r} downloaded to multiple times")
-                self.in_progress[obj.path] = obj
-                log.info("Downloading %r to %r", obj.url, obj.path)
-                await self.addurl.send(f"{obj.url} {obj.path}\n")
+                path = str(obj.path)
+                if path in self.in_progress:
+                    raise ValueError(f"Path {path!r} downloaded to multiple times")
+                self.in_progress[path] = obj
+                log.info("Downloading %s to %s", obj.url, path)
+                await self.addurl.send(f"{obj.url} {path}\n")
             log.debug("Done feeding URLs to addurl")
 
     async def read_addurl(self) -> None:
@@ -150,7 +139,7 @@ class Downloader:
                     log.info("Finished downloading %s (key = %s)", path, key)
                     self.downloaded += 1
                     dl = self.in_progress.pop(path)
-                    if dl.metadata and dl.extra_urls:
+                    if dl.metadata or dl.extra_urls:
                         await self.post_sender.send((dl, key))
             log.debug("Done reading from addurl")
 
@@ -178,7 +167,9 @@ class Downloader:
                                     dl.metadata,
                                 )
                                 await metadata.send(
-                                    json.dumps({"file": dl.path, "fields": dl.metadata})
+                                    json.dumps(
+                                        {"file": str(dl.path), "fields": dl.metadata}
+                                    )
                                     + "\n"
                                 )
                                 data = json.loads(await anext(mdout))
@@ -227,62 +218,3 @@ async def download(
         # log.error("%d files failed to download", dm.failures)
         raise RuntimeError(f"{dm.failures} files failed to download")
     return dm.downloaded
-
-
-INTER_API_SLEEP = 3
-PER_PAGE = 100
-
-
-async def aiterarxiv(category: str, limit: int) -> AsyncIterator[Downloadable]:
-    async with httpx.AsyncClient() as client:
-        for start in range(0, limit + PER_PAGE - 1, PER_PAGE):
-            # <https://arxiv.org/help/api/user-manual>
-            url = "http://export.arxiv.org/api/query"
-            params: Dict[str, Union[str, int]] = {
-                "search_query": f"cat:{category}",
-                "start": start,
-                "max_results": PER_PAGE,
-            }
-            r = await client.get(url, params=params)
-            r.raise_for_status()
-            feed = feedparser.parse(r.text)
-            if not feed.entries:
-                break
-            for e in feed.entries:
-                log.info("Found %s (%r)", e.id, e.title)
-                try:
-                    urlbits = urlparse(e.id)
-                except ValueError:
-                    log.warning("Could not parse arXiv ID %r", e.id)
-                    continue
-                path = urlbits.path.lstrip("/")
-                if path.startswith("abs/"):
-                    path = path[4:]
-                if not path:
-                    log.warning("Could not parse arXiv ID %r", e.id)
-                    continue
-                path += ".pdf"
-                try:
-                    (pdflink,) = [
-                        link.href for link in e.links if link.type == "application/pdf"
-                    ]
-                except ValueError:
-                    log.warning("Could not determine PDF download link for %s", e.id)
-                    continue
-                metadata = {
-                    "url": [e.id],
-                    "title": [e.title],
-                    "published": [e.published],
-                    "updated": [e.updated],
-                    "category": [e.arxiv_primary_category["term"]],
-                }
-                try:
-                    metadata["doi"] = [e.arxiv_doi]
-                except AttributeError:
-                    pass
-                yield Downloadable(
-                    path=path, url=pdflink, metadata=metadata, extra_urls=[e.id]
-                )
-            if start + PER_PAGE < limit:
-                await trio.sleep(INTER_API_SLEEP)
-        log.info("Done fetching arXiv entries")
