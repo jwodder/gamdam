@@ -64,6 +64,14 @@ Options
                                 case-insensitive) and their Python integer
                                 equivalents.  [default: INFO]
 
+-m TEXT, --message TEXT         The commit message to use when saving.  This
+                                may contain a ``{downloaded}`` placeholder
+                                which will be replaced with the number of files
+                                successfully downloaded.
+
+--save, --no-save               Whether to commit the downloaded files once
+                                they've all been downloaded  [default: --save]
+
 
 Input Format
 ------------

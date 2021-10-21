@@ -112,10 +112,24 @@ def main() -> None:
 @click.argument("category")  # arXiv category code
 @click.pass_context
 def arxiv(
-    ctx: click.Context, repo: Path, category: str, limit: int, log_level: int, jobs: int
+    ctx: click.Context,
+    repo: Path,
+    category: str,
+    limit: int,
+    log_level: int,
+    jobs: int,
+    save: bool,
+    message: str,
 ) -> None:
     init_logging(log_level)
-    download_to_repo(ctx, arxiv_articles(category, limit), repo, jobs=jobs)
+    download_to_repo(
+        ctx,
+        arxiv_articles(category, limit),
+        repo,
+        jobs=jobs,
+        save=save,
+        message=message,
+    )
 
 
 @main.command()
@@ -123,10 +137,18 @@ def arxiv(
 @click.argument("mtg-set")  # MTG set code as used by Scryfall
 @click.pass_context
 def mtg(
-    ctx: click.Context, repo: Path, mtg_set: str, log_level: int, jobs: int
+    ctx: click.Context,
+    repo: Path,
+    mtg_set: str,
+    log_level: int,
+    jobs: int,
+    save: bool,
+    message: str,
 ) -> None:
     init_logging(log_level)
-    download_to_repo(ctx, mtgimages(mtg_set), repo, jobs=jobs)
+    download_to_repo(
+        ctx, mtgimages(mtg_set), repo, jobs=jobs, save=save, message=message
+    )
 
 
 if __name__ == "__main__":

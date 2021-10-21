@@ -70,6 +70,19 @@ def common_options(func: Callable) -> Callable:
         default=logging.INFO,
         help="Set logging level  [default: INFO]",
     )
+    @click.option(
+        "-m",
+        "--message",
+        default="Downloaded {downloaded} URLs",
+        type=formattable,
+        help="The commit message to use when saving",
+        metavar="TEXT",
+    )
+    @click.option(
+        "--save/--no-save",
+        default=True,
+        help="Whether to commit the downloaded files when done  [default: --save]",
+    )
     @wraps(func)
     def wrapped(*args: Any, **kwargs: Any) -> Any:
         return func(*args, **kwargs)
@@ -77,17 +90,24 @@ def common_options(func: Callable) -> Callable:
     return wrapped
 
 
+def formattable(s: str) -> str:
+    s.format(downloaded=42)  # Raises a ValueError if not formattable
+    return s
+
+
 def download_to_repo(
     ctx: click.Context,
     objects: AsyncIterator[Downloadable],
     repo: Path,
+    message: str,
     jobs: int = DEFAULT_JOBS,
+    save: bool = True,
 ) -> None:
     ensure_annex_repo(repo)
     report = trio.run(download, repo, objects, jobs)
-    if report.downloaded:
+    if report.downloaded and save:
         subprocess.run(
-            ["git", "commit", "-m", f"Downloaded {report.downloaded} URLs"],
+            ["git", "commit", "-m", message.format(downloaded=report.downloaded)],
             cwd=repo,
             check=True,
         )
