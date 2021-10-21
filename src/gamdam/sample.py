@@ -1,4 +1,3 @@
-import logging
 import os.path
 from pathlib import Path
 import subprocess
@@ -9,7 +8,7 @@ import feedparser
 import httpx
 import trio
 from .core import Downloadable, download, log
-from .util import ensure_annex_repo
+from .util import common_options, ensure_annex_repo, init_logging
 
 
 async def arxiv_articles(category: str, limit: int) -> AsyncIterator[Downloadable]:
@@ -103,28 +102,18 @@ async def mtgimages(set_id: str) -> AsyncIterator[Downloadable]:
 
 @click.group()
 def main() -> None:
-    logging.basicConfig(
-        format="%(asctime)s [%(levelname)-8s] %(name)s %(message)s",
-        datefmt="%H:%M:%S%z",
-        level=logging.DEBUG,
-    )
+    pass
 
 
 @main.command()
-@click.option(
-    "-C",
-    "--chdir",
-    "repo",
-    type=click.Path(file_okay=False, path_type=Path),
-    default=os.curdir,
-    help="Git Annex repository to operate in",
-)
+@common_options
 @click.option(
     "--limit", type=int, default=1000, help="Maximum number of items to download"
 )
 # arXiv category code
 @click.argument("category")
-def arxiv(repo: Path, category: str, limit: int) -> None:
+def arxiv(repo: Path, category: str, limit: int, log_level: int) -> None:
+    init_logging(log_level)
     ensure_annex_repo(repo)
     downloaded = trio.run(download, repo, arxiv_articles(category, limit))
     subprocess.run(
@@ -135,17 +124,11 @@ def arxiv(repo: Path, category: str, limit: int) -> None:
 
 
 @main.command()
-@click.option(
-    "-C",
-    "--chdir",
-    "repo",
-    type=click.Path(file_okay=False, path_type=Path),
-    default=os.curdir,
-    help="Git Annex repository to operate in",
-)
+@common_options
 # MTG set code as used by Scryfall
 @click.argument("mtg-set")
-def mtg(repo: Path, mtg_set: str) -> None:
+def mtg(repo: Path, mtg_set: str, log_level: int) -> None:
+    init_logging(log_level)
     ensure_annex_repo(repo)
     downloaded = trio.run(download, repo, mtgimages(mtg_set))
     subprocess.run(
