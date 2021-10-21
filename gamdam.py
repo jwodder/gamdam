@@ -50,11 +50,12 @@ class Downloadable:
 
 @dataclass
 class TextProcess:
-    p: trio.abc.Process
+    p: trio.Process
     name: str
     encoding: str = "utf-8"
 
     async def send(self, s: str) -> None:
+        assert self.p.stdin is not None
         await self.p.stdin.send_all(s.encode(self.encoding))
 
     async def __aenter__(self) -> TextProcess:
@@ -71,6 +72,7 @@ class TextProcess:
 
     async def __aiter__(self) -> AsyncIterator[str]:
         buff = b""
+        assert self.p.stdout is not None
         async for blob in self.p.stdout:
             lines = deque((buff + blob).splitlines(True))
             ### PROBLEM: This will break if splitlines() encounters a line
@@ -93,7 +95,7 @@ async def open_git_annex(
         ["git-annex", *args],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE if capture else None,
-        cwd=path,
+        cwd=str(path),  # trio-typing says this has to be a string.
     )
     return TextProcess(p, name=args[0])
 
@@ -112,6 +114,7 @@ class Downloader:
         self.post_sender, self.post_receiver = trio.open_memory_channel(0)
 
     async def feed_addurl(self, objects: AsyncIterator[Downloadable]) -> None:
+        assert self.addurl.p.stdin is not None
         async with self.addurl.p.stdin:
             async for obj in objects:
                 if obj.path in self.in_progress:
@@ -163,7 +166,10 @@ class Downloader:
                 "--json-error-messages",
                 path=self.repo_path,
             ) as metadata:
-                async with aclosing(aiter(metadata)) as mdout:
+                # The `ignore` can be removed once
+                # <https://github.com/python-trio/trio-typing/pull/41> is
+                # released.
+                async with aclosing(aiter(metadata)) as mdout:  # typing: ignore[type-var]
                     async with self.post_receiver:
                         async for dl, key in self.post_receiver:
                             if dl.metadata:
