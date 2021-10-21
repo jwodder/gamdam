@@ -98,17 +98,9 @@ class Downloader:
         async with self.addurl.p.stdin:
             async for obj in objects:
                 path = str(obj.path)
-                if path in self.in_progress:
-                    ### TODO: Handle paths already removed from in_progress
-                    log.warning(
-                        "Path %r downloaded to multiple times;"
-                        " ignoring duplicate entry",
-                        path,
-                    )
-                else:
-                    self.in_progress[path] = obj
-                    log.info("Downloading %s to %s", obj.url, path)
-                    await self.addurl.send(f"{obj.url} {path}\n")
+                self.in_progress[path] = obj
+                log.info("Downloading %s to %s", obj.url, path)
+                await self.addurl.send(f"{obj.url} {path}\n")
             log.debug("Done feeding URLs to addurl")
 
     async def read_addurl(self) -> None:

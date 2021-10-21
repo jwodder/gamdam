@@ -76,8 +76,9 @@ object has the following fields:
 
 ``path``
     *(required)* A relative path where the contents of the URL should be saved.
-    If multiple input entries target the same path, all entries after the first
-    will be discarded, and a warning will be emitted.
+    If a file already exists at this path, ``git-annex`` will try to register
+    the URL as an additional location for the file, failing if the resource at
+    the URL is not the same size as the extant file.
 
 ``metadata``
     A collection of metadata in the form used by ``git-annex metadata``, i.e.,
