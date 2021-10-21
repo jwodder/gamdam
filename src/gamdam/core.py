@@ -9,7 +9,7 @@ import sys
 from typing import AsyncIterable, AsyncIterator, Dict, List, Optional, Tuple, TypeVar
 from pydantic import AnyHttpUrl, BaseModel, validator
 import trio
-from .consts import DEFAULT_JOBS
+from .consts import DEEP_DEBUG, DEFAULT_JOBS
 
 if sys.version_info[:2] >= (3, 10):
     from contextlib import aclosing
@@ -55,6 +55,7 @@ class TextProcess(trio.abc.AsyncResource):
 
     async def send(self, s: str) -> None:
         assert self.p.stdin is not None
+        log.log(DEEP_DEBUG, "Sending to %s command: %r", self.name, s)
         await self.p.stdin.send_all(s.encode(self.encoding))
 
     async def aclose(self) -> None:
@@ -67,18 +68,24 @@ class TextProcess(trio.abc.AsyncResource):
             )
 
     async def __aiter__(self) -> AsyncIterator[str]:
+        def decode(bs: bytes) -> str:
+            s = bs.decode(self.encoding)
+            log.log(DEEP_DEBUG, "Decoded line from %s command: %r", self.name, s)
+            return s
+
         buff = b""
         assert self.p.stdout is not None
         async for blob in self.p.stdout:
+            log.log(DEEP_DEBUG, "Read from %s command: %r", self.name, blob)
             lines, buff = split_unix_lines(buff + blob)
             for ln in lines:
-                yield ln.decode(self.encoding)
+                yield decode(ln)
         if buff:
             lines, buff = split_unix_lines(buff)
             for ln in lines:
-                yield ln.decode(self.encoding)
+                yield decode(ln)
             if buff:
-                yield buff.decode(self.encoding)
+                yield decode(buff)
 
 
 @dataclass
@@ -110,7 +117,6 @@ class Downloader:
     async def read_addurl(self) -> None:
         async with self.post_sender:
             async for line in self.addurl:
-                log.debug("Line read from addurl: %s", line.rstrip("\n"))
                 data = json.loads(line)
                 if "success" not in data:
                     # Progress message
@@ -156,11 +162,6 @@ class Downloader:
                     async with self.post_receiver:
                         async for dl, key in self.post_receiver:
                             if dl.metadata:
-                                log.debug(
-                                    "Sending metadata for %s to git-annex: %r",
-                                    dl.path,
-                                    dl.metadata,
-                                )
                                 await metadata.send(
                                     json.dumps(
                                         {"file": str(dl.path), "fields": dl.metadata}
@@ -168,10 +169,6 @@ class Downloader:
                                     + "\n"
                                 )
                                 data = json.loads(await anext(mdout))
-                                log.debug(
-                                    "Response received from `git-annex metadata`: %r",
-                                    data,
-                                )
                                 if not data["success"]:
                                     log.error(
                                         "%s: setting metadata failed;"
