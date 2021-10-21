@@ -10,7 +10,6 @@ import textwrap
 from typing import AsyncIterable, AsyncIterator, Dict, List, Optional, Tuple, TypeVar
 from pydantic import AnyHttpUrl, BaseModel, validator
 import trio
-from .consts import DEEP_DEBUG, DEFAULT_JOBS
 
 if sys.version_info[:2] >= (3, 10):
     from contextlib import aclosing
@@ -27,6 +26,8 @@ else:
 
 
 log = logging.getLogger("gamdam")
+
+DEEP_DEBUG = 5
 
 
 class Downloadable(BaseModel):
@@ -189,14 +190,14 @@ class Downloader:
 
 
 async def download(
-    repo: Path, objects: AsyncIterator[Downloadable], jobs: int = DEFAULT_JOBS
+    repo: Path, objects: AsyncIterator[Downloadable], jobs: Optional[int] = None
 ) -> Report:
     async with await open_git_annex(
         "addurl",
         "--batch",
         "--with-files",
         "--jobs",
-        str(jobs),
+        "cpus" if jobs is None else str(jobs),
         "--json",
         "--json-error-messages",
         "--json-progress",

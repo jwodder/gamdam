@@ -3,11 +3,10 @@ import logging
 import os
 from pathlib import Path
 import subprocess
-from typing import Any, AsyncIterator, Callable
+from typing import Any, AsyncIterator, Callable, Optional
 import click
 from click_loglevel import LogLevel
 import trio
-from .consts import DEFAULT_JOBS
 from .core import Downloadable, download, log
 
 
@@ -64,9 +63,8 @@ def download_to_repo(func: Callable[..., AsyncIterator[Downloadable]]) -> Callab
         "-J",
         "--jobs",
         type=int,
-        default=DEFAULT_JOBS,
+        default=None,
         help="Number of jobs for `git-annex addurl` to use",
-        show_default=True,
     )
     @click.option(
         "-l",
@@ -94,7 +92,7 @@ def download_to_repo(func: Callable[..., AsyncIterator[Downloadable]]) -> Callab
         ctx: click.Context,
         repo: Path,
         log_level: int,
-        jobs: int,
+        jobs: Optional[int],
         save: bool,
         message: str,
         **kwargs: Any

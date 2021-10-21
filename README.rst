@@ -56,7 +56,8 @@ Options
                                 one.
 
 -J INT, --jobs INT              Number of parallel jobs for ``git-annex
-                                addurl`` to use  [default: 10]
+                                addurl`` to use; by default, the process is
+                                instructed to use one job per CPU core.
 
 -l LEVEL, --log-level LEVEL     Set the log level to the given value.  Possible
                                 values are "``CRITICAL``", "``ERROR``",
@@ -112,13 +113,13 @@ Library Use
     async def download(
         repo: pathlib.Path,
         objects: AsyncIterator[Downloadable],
-        jobs: int = 10,
+        jobs: Optional[int] = None,
     ) -> Report
 
 Download the items yielded by the async iterator ``objects`` to the directory
 ``repo`` (which must be part of a git-annex repository) and set their metadata.
 ``jobs`` is the number of parallel jobs that the ``git-annex addurl`` process
-will use.
+will use; a value of ``None`` means to use one job per CPU core.
 
 .. code:: python
 
