@@ -12,6 +12,8 @@ from pydantic import AnyHttpUrl, BaseModel, validator
 import trio
 
 if sys.version_info[:2] >= (3, 10):
+    # So aiter() can be re-exported without mypy complaining:
+    from builtins import aiter as aiter
     from contextlib import aclosing
 else:
     from async_generator import aclosing
@@ -77,11 +79,12 @@ class TextProcess(trio.abc.AsyncResource):
 
         buff = b""
         assert self.p.stdout is not None
-        async for blob in self.p.stdout:
-            log.log(DEEP_DEBUG, "Read from %s command: %r", self.name, blob)
-            lines, buff = split_unix_lines(buff + blob)
-            for ln in lines:
-                yield decode(ln)
+        async with aclosing(aiter(self.p.stdout)) as blobiter:  # type: ignore[type-var]
+            async for blob in blobiter:
+                log.log(DEEP_DEBUG, "Read from %s command: %r", self.name, blob)
+                lines, buff = split_unix_lines(buff + blob)
+                for ln in lines:
+                    yield decode(ln)
         if buff:
             lines, buff = split_unix_lines(buff)
             for ln in lines:
@@ -109,43 +112,47 @@ class Downloader:
     async def feed_addurl(self, objects: AsyncIterator[Downloadable]) -> None:
         assert self.addurl.p.stdin is not None
         async with self.addurl.p.stdin:
-            async for obj in objects:
-                path = str(obj.path)
-                self.in_progress[path] = obj
-                log.info("Downloading %s to %s", obj.url, path)
-                await self.addurl.send(f"{obj.url} {path}\n")
-            log.debug("Done feeding URLs to addurl")
+            async with aclosing(objects):  # type: ignore[type-var]
+                async for obj in objects:
+                    path = str(obj.path)
+                    self.in_progress[path] = obj
+                    log.info("Downloading %s to %s", obj.url, path)
+                    await self.addurl.send(f"{obj.url} {path}\n")
+                log.debug("Done feeding URLs to addurl")
 
     async def read_addurl(self) -> None:
         async with self.post_sender:
-            async for line in self.addurl:
-                data = json.loads(line)
-                if "success" not in data:
-                    # Progress message
-                    log.info(
-                        "%s: Downloaded %d / %s bytes (%s)",
-                        data["action"]["file"],
-                        data["byte-progress"],
-                        data.get("total-size", "???"),
-                        data.get("percent-progress", "??.??%"),
-                    )
-                elif not data["success"]:
-                    log.error(
-                        "%s: download failed; error messages:\n\n%s",
-                        data["file"],
-                        textwrap.indent("".join(data["error-messages"]), " " * 4),
-                    )
-                    self.report.failed += 1
-                    self.in_progress.pop(data["file"])
-                else:
-                    path = data["file"]
-                    key = data.get("key")
-                    log.info("Finished downloading %s (key = %s)", path, key)
-                    self.report.downloaded += 1
-                    dl = self.in_progress.pop(path)
-                    if dl.metadata or (dl.extra_urls and key is not None):
-                        await self.post_sender.send((dl, key))
-            log.debug("Done reading from addurl")
+            async with aclosing(
+                aiter(self.addurl)
+            ) as lineiter:  # type: ignore[type-var]
+                async for line in lineiter:
+                    data = json.loads(line)
+                    if "success" not in data:
+                        # Progress message
+                        log.info(
+                            "%s: Downloaded %d / %s bytes (%s)",
+                            data["action"]["file"],
+                            data["byte-progress"],
+                            data.get("total-size", "???"),
+                            data.get("percent-progress", "??.??%"),
+                        )
+                    elif not data["success"]:
+                        log.error(
+                            "%s: download failed; error messages:\n\n%s",
+                            data["file"],
+                            textwrap.indent("".join(data["error-messages"]), " " * 4),
+                        )
+                        self.report.failed += 1
+                        self.in_progress.pop(data["file"])
+                    else:
+                        path = data["file"]
+                        key = data.get("key")
+                        log.info("Finished downloading %s (key = %s)", path, key)
+                        self.report.downloaded += 1
+                        dl = self.in_progress.pop(path)
+                        if dl.metadata or (dl.extra_urls and key is not None):
+                            await self.post_sender.send((dl, key))
+                log.debug("Done reading from addurl")
 
     async def add_metadata(self) -> None:
         async with await open_git_annex(
