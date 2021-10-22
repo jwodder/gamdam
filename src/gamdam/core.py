@@ -23,9 +23,6 @@ else:
     def aiter(obj: AsyncIterable[T]) -> AsyncIterator[T]:
         return obj.__aiter__()
 
-    async def anext(obj: AsyncIterator[T]) -> T:
-        return await obj.__anext__()
-
 
 log = logging.getLogger("gamdam")
 
@@ -56,11 +53,7 @@ class TextProcess(trio.abc.AsyncResource):
     p: trio.Process
     name: str
     encoding: str = "utf-8"
-
-    async def send(self, s: str) -> None:
-        assert self.p.stdin is not None
-        log.log(DEEP_DEBUG, "Sending to %s command: %r", self.name, s)
-        await self.p.stdin.send_all(s.encode(self.encoding))
+    buff: bytes = b""
 
     async def aclose(self) -> None:
         await self.p.aclose()
@@ -71,26 +64,42 @@ class TextProcess(trio.abc.AsyncResource):
                 self.p.returncode,
             )
 
-    async def __aiter__(self) -> AsyncIterator[str]:
-        def decode(bs: bytes) -> str:
-            s = bs.decode(self.encoding)
-            log.log(DEEP_DEBUG, "Decoded line from %s command: %r", self.name, s)
-            return s
+    async def send(self, s: str) -> None:
+        assert self.p.stdin is not None
+        log.log(DEEP_DEBUG, "Sending to %s command: %r", self.name, s)
+        await self.p.stdin.send_all(s.encode(self.encoding))
 
-        buff = b""
+    async def readline(self) -> str:
         assert self.p.stdout is not None
-        async with aclosing(aiter(self.p.stdout)) as blobiter:  # type: ignore[type-var]
-            async for blob in blobiter:
-                log.log(DEEP_DEBUG, "Read from %s command: %r", self.name, blob)
-                lines, buff = split_unix_lines(buff + blob)
-                for ln in lines:
-                    yield decode(ln)
-        if buff:
-            lines, buff = split_unix_lines(buff)
-            for ln in lines:
-                yield decode(ln)
-            if buff:
-                yield decode(buff)
+        while True:
+            try:
+                i = self.buff.index(b"\n")
+            except ValueError:
+                blob = await self.p.stdout.receive_some()
+                if blob == b"":
+                    # EOF
+                    log.log(DEEP_DEBUG, "%s command reached EOF", self.name)
+                    line = self.buff.decode(self.encoding)
+                    self.buff = b""
+                    log.log(
+                        DEEP_DEBUG, "Decoded line from %s command: %r", self.name, line
+                    )
+                    return line
+                else:
+                    self.buff += blob
+            else:
+                line = self.buff[: i + 1].decode(self.encoding)
+                self.buff = self.buff[i + 1 :]
+                log.log(DEEP_DEBUG, "Decoded line from %s command: %r", self.name, line)
+                return line
+
+    async def __aiter__(self) -> AsyncIterator[str]:
+        while True:
+            line = await self.readline()
+            if line == "":
+                break
+            else:
+                yield line
 
 
 @dataclass
@@ -112,6 +121,8 @@ class Downloader:
     async def feed_addurl(self, objects: AsyncIterator[Downloadable]) -> None:
         assert self.addurl.p.stdin is not None
         async with self.addurl.p.stdin:
+            # The "type: ignore" can be removed once
+            # <https://github.com/python-trio/trio-typing/pull/41> is released.
             async with aclosing(objects):  # type: ignore[type-var]
                 async for obj in objects:
                     path = str(obj.path)
@@ -165,36 +176,34 @@ class Downloader:
                 "--json-error-messages",
                 path=self.repo,
             ) as metadata:
-                # The "type: ignore" can be removed once
-                # <https://github.com/python-trio/trio-typing/pull/41> is
-                # released.
-                async with aclosing(aiter(metadata)) as mdout:  # type: ignore[type-var]
-                    async with self.post_receiver:
-                        async for dl, key in self.post_receiver:
-                            if dl.metadata:
-                                await metadata.send(
-                                    json.dumps(
-                                        {"file": str(dl.path), "fields": dl.metadata}
-                                    )
-                                    + "\n"
+                async with self.post_receiver:
+                    async for dl, key in self.post_receiver:
+                        if dl.metadata:
+                            await metadata.send(
+                                json.dumps(
+                                    {"file": str(dl.path), "fields": dl.metadata}
                                 )
-                                data = json.loads(await anext(mdout))
-                                if not data["success"]:
-                                    log.error(
-                                        "%s: setting metadata failed;"
-                                        " error messages:\n\n%s",
-                                        dl.path,
-                                        textwrap.indent(
-                                            "".join(data["error-messages"]), " " * 4
-                                        ),
-                                    )
-                                else:
-                                    log.info("Set metadata on %s", dl.path)
-                            if key is not None:
-                                for u in dl.extra_urls or []:
-                                    log.info("Registering URL %r for %s", u, dl.path)
-                                    await registerurl.send(f"{key} {u}\n")
-                        log.debug("Done post-processing metadata")
+                                + "\n"
+                            )
+                            # TODO: Do something if readline() returns ""
+                            # (signalling EOF)
+                            data = json.loads(await metadata.readline())
+                            if not data["success"]:
+                                log.error(
+                                    "%s: setting metadata failed;"
+                                    " error messages:\n\n%s",
+                                    dl.path,
+                                    textwrap.indent(
+                                        "".join(data["error-messages"]), " " * 4
+                                    ),
+                                )
+                            else:
+                                log.info("Set metadata on %s", dl.path)
+                        if key is not None:
+                            for u in dl.extra_urls or []:
+                                log.info("Registering URL %r for %s", u, dl.path)
+                                await registerurl.send(f"{key} {u}\n")
+                    log.debug("Done post-processing metadata")
 
 
 async def download(
@@ -234,17 +243,3 @@ async def open_git_annex(*args: str, path: Optional[Path] = None) -> TextProcess
         cwd=str(path),  # trio-typing says this has to be a string.
     )
     return TextProcess(p, name=args[0])
-
-
-# We can't use splitlines() because it splits on \r, but we only want to split
-# on \n.
-def split_unix_lines(bs: bytes) -> Tuple[List[bytes], bytes]:
-    lines: List[bytes] = []
-    while True:
-        try:
-            i = bs.index(b"\n")
-        except ValueError:
-            break
-        lines.append(bs[: i + 1])
-        bs = bs[i + 1 :]
-    return lines, bs
