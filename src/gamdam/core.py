@@ -156,7 +156,7 @@ class Downloader:
 
     async def add_metadata(self) -> None:
         async with await open_git_annex(
-            "registerurl", "--batch", path=self.repo, capture=False
+            "registerurl", "--batch", path=self.repo
         ) as registerurl:
             async with await open_git_annex(
                 "metadata",
@@ -223,16 +223,14 @@ async def download(
     return dm.report
 
 
-async def open_git_annex(
-    *args: str, path: Optional[Path] = None, capture: bool = True
-) -> TextProcess:
+async def open_git_annex(*args: str, path: Optional[Path] = None) -> TextProcess:
     # Note: The syntax for starting an interactable process will change in trio
     # 0.20.0.
     log.debug("Running git-annex %s", shlex.join(args))
     p = await trio.open_process(
         ["git-annex", *args],
         stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE if capture else None,
+        stdout=subprocess.PIPE,
         cwd=str(path),  # trio-typing says this has to be a string.
     )
     return TextProcess(p, name=args[0])
