@@ -13,7 +13,7 @@ async def arxiv_articles(category: str, limit: int) -> AsyncIterator[Downloadabl
     INTER_API_SLEEP = 3
     PER_PAGE = 100
     async with httpx.AsyncClient() as client:
-        for start in range(0, limit + PER_PAGE - 1, PER_PAGE):
+        for start in range(0, limit, PER_PAGE):
             # <https://arxiv.org/help/api/user-manual>
             url = "http://export.arxiv.org/api/query"
             params: Dict[str, Union[str, int]] = {
