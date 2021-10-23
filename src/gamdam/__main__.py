@@ -110,16 +110,24 @@ def main(
         dlfunc = partial(dlfunc, subscriber=partial(write_failures, failures))
     report = trio.run(dlfunc, repo, readfile(infile), jobs, addurl_opts)
     if report.downloaded and save and not (no_save_on_fail and report.failed):
-        subprocess.run(
-            [
-                "git",
-                "commit",
-                "-m",
-                message.format(downloaded=report.downloaded),
-            ],
-            cwd=repo,
-            check=True,
-        )
+        if (
+            subprocess.run(["git", "diff", "--cached", "--quiet"], cwd=repo).returncode
+            != 0
+        ):
+            subprocess.run(
+                [
+                    "git",
+                    "commit",
+                    "-m",
+                    message.format(downloaded=report.downloaded),
+                ],
+                cwd=repo,
+                check=True,
+            )
+        else:
+            # This can happen if we only downloaded files that were already
+            # present in the repo.
+            log.info("Nothing to commit")
     if report.failed:
         ctx.exit(1)
 
