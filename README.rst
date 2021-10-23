@@ -55,6 +55,9 @@ Options
                                 git-annex repository, it will be initialized as
                                 one.
 
+-F FILE, --failures FILE        If any files fail to download, write their
+                                input records back out to ``FILE``
+
 -J INT, --jobs INT              Number of parallel jobs for ``git-annex
                                 addurl`` to use; by default, the process is
                                 instructed to use one job per CPU core.
@@ -118,12 +121,20 @@ Library Use
         repo: pathlib.Path,
         objects: AsyncIterator[Downloadable],
         jobs: Optional[int] = None,
+        subscriber: Optional[
+            Callable[[trio.abc.ReceiveChannel[DownloadResult]], Awaitable]
+        ] = None,
     ) -> Report
 
 Download the items yielded by the async iterator ``objects`` to the directory
 ``repo`` (which must be part of a git-annex repository) and set their metadata.
-``jobs`` is the number of parallel jobs that the ``git-annex addurl`` process
-will use; a value of ``None`` means to use one job per CPU core.
+``jobs`` is the number of parallel jobs for the ``git-annex addurl`` process to
+use; a value of ``None`` means to use one job per CPU core.
+
+If ``subscriber`` is supplied, it will be called with a
+``trio.abc.ReceiveChannel`` over which it will be sent a ``DownloadResult``
+(see below) for each completed download, both successful and failed.  This can
+be used to implement custom post-processing of downloads.
 
 .. code:: python
 
@@ -136,7 +147,19 @@ will use; a value of ``None`` means to use one job per CPU core.
 ``Downloadable`` is a pydantic_ model used to represent files to download; see
 `Input Format`_ above for the meanings of the fields.
 
-.. _pydantic: https://pydantic-docs.helpmanual.io
+.. code:: python
+
+    class DownloadResult(pydantic.BaseModel):
+        downloadable: Downloadable
+        success: bool
+        key: Optional[str] = None
+        error_messages: Optional[List[str]] = None
+
+``DownloadResult`` is a pydantic_ model used to represent a completed download.
+It contains the original ``Downloadable``, a flag to indicate download success,
+the downloaded file's git-annex key (only set if the download was successful
+and the file is tracked by git-annex) and any error messages from the addurl
+process (only set if the download failed).
 
 .. code:: python
 
@@ -147,3 +170,5 @@ will use; a value of ``None`` means to use one job per CPU core.
 
 ``Report`` is used as the return value of ``download()``; it contains the
 number of files successfully downloaded and the number of failed downloads.
+
+.. _pydantic: https://pydantic-docs.helpmanual.io

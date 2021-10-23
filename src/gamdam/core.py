@@ -1,4 +1,5 @@
 from __future__ import annotations
+from contextlib import AsyncExitStack
 from dataclasses import dataclass, field
 import json
 import logging
@@ -7,7 +8,16 @@ import shlex
 import subprocess
 import sys
 import textwrap
-from typing import AsyncIterable, AsyncIterator, Dict, List, Optional, Tuple, TypeVar
+from typing import (
+    AsyncIterable,
+    AsyncIterator,
+    Awaitable,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    TypeVar,
+)
 from pydantic import AnyHttpUrl, BaseModel, validator
 import trio
 
@@ -40,6 +50,13 @@ class Downloadable(BaseModel):
         if v.is_absolute():
             raise ValueError("Download target paths cannot be absolute")
         return v
+
+
+class DownloadResult(BaseModel):
+    downloadable: Downloadable
+    success: bool
+    key: Optional[str] = None
+    error_messages: Optional[List[str]] = None
 
 
 @dataclass
@@ -108,15 +125,6 @@ class Downloader:
     repo: Path
     report: Report = field(init=False, default_factory=Report)
     in_progress: Dict[str, Downloadable] = field(init=False, default_factory=dict)
-    post_sender: trio.abc.SendChannel[Tuple[Downloadable, Optional[str]]] = field(
-        init=False
-    )
-    post_receiver: trio.abc.ReceiveChannel[Tuple[Downloadable, Optional[str]]] = field(
-        init=False
-    )
-
-    def __post_init__(self) -> None:
-        self.post_sender, self.post_receiver = trio.open_memory_channel(0)
 
     async def feed_addurl(self, objects: AsyncIterator[Downloadable]) -> None:
         assert self.addurl.p.stdin is not None
@@ -131,8 +139,12 @@ class Downloader:
                     await self.addurl.send(f"{obj.url} {path}\n")
                 log.debug("Done feeding URLs to addurl")
 
-    async def read_addurl(self) -> None:
-        async with self.post_sender:
+    async def read_addurl(
+        self, senders: List[trio.abc.SendChannel[DownloadResult]]
+    ) -> None:
+        async with AsyncExitStack() as stack:
+            for s in senders:
+                await stack.enter_async_context(s)
             async with aclosing(
                 aiter(self.addurl)
             ) as lineiter:  # type: ignore[type-var]
@@ -154,18 +166,28 @@ class Downloader:
                             textwrap.indent("".join(data["error-messages"]), " " * 4),
                         )
                         self.report.failed += 1
-                        self.in_progress.pop(data["file"])
+                        dl = self.in_progress.pop(data["file"])
+                        r = DownloadResult(
+                            downloadable=dl,
+                            success=False,
+                            error_messages=data["error-messages"],
+                        )
+                        for s in senders:
+                            await s.send(r)
                     else:
                         path = data["file"]
                         key = data.get("key")
                         log.info("Finished downloading %s (key = %s)", path, key)
                         self.report.downloaded += 1
                         dl = self.in_progress.pop(path)
-                        if dl.metadata or (dl.extra_urls and key is not None):
-                            await self.post_sender.send((dl, key))
+                        r = DownloadResult(downloadable=dl, success=True, key=key)
+                        for s in senders:
+                            await s.send(r)
                 log.debug("Done reading from addurl")
 
-    async def add_metadata(self) -> None:
+    async def add_metadata(
+        self, receiver: trio.abc.ReceiveChannel[DownloadResult]
+    ) -> None:
         async with await open_git_annex(
             "registerurl", "--batch", path=self.repo
         ) as registerurl:
@@ -176,12 +198,17 @@ class Downloader:
                 "--json-error-messages",
                 path=self.repo,
             ) as metadata:
-                async with self.post_receiver:
-                    async for dl, key in self.post_receiver:
-                        if dl.metadata:
+                async with receiver:
+                    async for r in receiver:
+                        if not r.success:
+                            continue
+                        if r.downloadable.metadata:
                             await metadata.send(
                                 json.dumps(
-                                    {"file": str(dl.path), "fields": dl.metadata}
+                                    {
+                                        "file": str(r.downloadable.path),
+                                        "fields": r.downloadable.metadata,
+                                    }
                                 )
                                 + "\n"
                             )
@@ -192,22 +219,29 @@ class Downloader:
                                 log.error(
                                     "%s: setting metadata failed;"
                                     " error messages:\n\n%s",
-                                    dl.path,
+                                    r.downloadable.path,
                                     textwrap.indent(
                                         "".join(data["error-messages"]), " " * 4
                                     ),
                                 )
                             else:
-                                log.info("Set metadata on %s", dl.path)
-                        if key is not None:
-                            for u in dl.extra_urls or []:
-                                log.info("Registering URL %r for %s", u, dl.path)
-                                await registerurl.send(f"{key} {u}\n")
+                                log.info("Set metadata on %s", r.downloadable.path)
+                        if r.key is not None:
+                            for u in r.downloadable.extra_urls or []:
+                                log.info(
+                                    "Registering URL %r for %s", u, r.downloadable.path
+                                )
+                                await registerurl.send(f"{r.key} {u}\n")
                     log.debug("Done post-processing metadata")
 
 
 async def download(
-    repo: Path, objects: AsyncIterator[Downloadable], jobs: Optional[int] = None
+    repo: Path,
+    objects: AsyncIterator[Downloadable],
+    jobs: Optional[int] = None,
+    subscriber: Optional[
+        Callable[[trio.abc.ReceiveChannel[DownloadResult]], Awaitable]
+    ] = None,
 ) -> Report:
     async with await open_git_annex(
         "addurl",
@@ -223,9 +257,20 @@ async def download(
     ) as p:
         dm = Downloader(p, repo)
         async with trio.open_nursery() as nursery:
+            sender: trio.abc.SendChannel[DownloadResult]
+            receiver: trio.abc.ReceiveChannel[DownloadResult]
+            sender, receiver = trio.open_memory_channel(0)
+            all_senders: List[trio.abc.SendChannel[DownloadResult]] = [sender]
+            if subscriber is not None:
+                sender2: trio.abc.SendChannel[DownloadResult]
+                receiver2: trio.abc.ReceiveChannel[DownloadResult]
+                sender2, receiver2 = trio.open_memory_channel(0)
+                all_senders.append(sender2)
+                nursery.start_soon(subscriber, receiver2)
             nursery.start_soon(dm.feed_addurl, objects)
-            nursery.start_soon(dm.read_addurl)
-            nursery.start_soon(dm.add_metadata)
+            nursery.start_soon(dm.read_addurl, all_senders)
+            nursery.start_soon(dm.add_metadata, receiver)
+
     log.info("Downloaded %d files", dm.report.downloaded)
     if dm.report.failed:
         log.error("%d files failed to download", dm.report.failed)

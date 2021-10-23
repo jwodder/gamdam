@@ -1,14 +1,14 @@
-from functools import wraps
+from functools import partial, wraps
 import logging
 import os
 from pathlib import Path
 import subprocess
 import sys
-from typing import Any, AsyncIterator, Callable, Optional, TextIO
+from typing import Any, AsyncIterator, Awaitable, Callable, Optional, TextIO
 import click
 from click_loglevel import LogLevel
 import trio
-from .core import Downloadable, download, log
+from .core import Downloadable, DownloadResult, Report, download, log
 
 if sys.version_info[:2] >= (3, 10):
     from contextlib import aclosing
@@ -66,6 +66,12 @@ def download_to_repo(func: Callable[..., AsyncIterator[Downloadable]]) -> Callab
         help="Git Annex repository to operate in",
     )
     @click.option(
+        "-F",
+        "--failures",
+        type=click.File("w"),
+        help="Write failed download items to the given file",
+    )
+    @click.option(
         "-J",
         "--jobs",
         type=int,
@@ -107,6 +113,7 @@ def download_to_repo(func: Callable[..., AsyncIterator[Downloadable]]) -> Callab
         save: bool,
         message: str,
         no_save_on_fail: bool,
+        failures: Optional[TextIO],
         output: Optional[TextIO] = None,
         **kwargs: Any
     ) -> None:
@@ -116,7 +123,10 @@ def download_to_repo(func: Callable[..., AsyncIterator[Downloadable]]) -> Callab
             trio.run(write_items, objects, output)
         else:
             ensure_annex_repo(repo)
-            report = trio.run(download, repo, objects, jobs)
+            dlfunc: Callable[..., Awaitable[Report]] = download
+            if failures is not None:
+                dlfunc = partial(dlfunc, subscriber=partial(write_failures, failures))
+            report = trio.run(dlfunc, repo, objects, jobs)
             if report.downloaded and save and not (no_save_on_fail and report.failed):
                 subprocess.run(
                     [
@@ -140,3 +150,14 @@ async def write_items(objects: AsyncIterator[Downloadable], output: TextIO) -> N
             async with aclosing(objects):  # type: ignore[type-var]
                 async for obj in objects:
                     await afp.write(obj.json() + "\n")
+
+
+async def write_failures(
+    output: TextIO, receiver: trio.abc.ReceiveChannel[DownloadResult]
+) -> None:
+    with output:
+        async with trio.wrap_file(output) as afp:
+            async with receiver:
+                async for r in receiver:
+                    if not r.success:
+                        await afp.write(r.downloadable.json() + "\n")
