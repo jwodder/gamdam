@@ -9,6 +9,7 @@ from typing import AsyncIterator, Awaitable, Callable, List, Optional, TextIO
 import click
 from click_loglevel import LogLevel
 import trio
+from . import __version__
 from .core import Downloadable, DownloadResult, Report, aiter, download, log
 
 if sys.version_info[:2] >= (3, 10):
@@ -74,6 +75,12 @@ def formattable(s: str) -> str:
     "--save/--no-save",
     default=True,
     help="Whether to commit the downloaded files when done  [default: --save]",
+)
+@click.version_option(
+    __version__,
+    "-V",
+    "--version",
+    message="%(prog)s %(version)s",
 )
 @click.argument("infile", type=click.File("r"), default="-")
 @click.pass_context
