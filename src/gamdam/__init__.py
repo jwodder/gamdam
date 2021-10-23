@@ -22,6 +22,6 @@ __author_email__ = "gamdam@varonathe.org"
 __license__ = "MIT"
 __url__ = "https://github.com/jwodder/gamdam"
 
-from .core import Downloadable, Report, download
+from .core import Downloadable, DownloadResult, Report, download
 
-__all__ = ["Downloadable", "Report", "download"]
+__all__ = ["DownloadResult", "Downloadable", "Report", "download"]
