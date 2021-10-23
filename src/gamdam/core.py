@@ -161,9 +161,9 @@ class Downloader:
                         )
                     elif not data["success"]:
                         log.error(
-                            "%s: download failed; error messages:\n\n%s",
+                            "%s: download failed:\n\n%s",
                             data["file"],
-                            textwrap.indent("".join(data["error-messages"]), " " * 4),
+                            format_errors(data["error-messages"]),
                         )
                         self.report.failed += 1
                         dl = self.in_progress.pop(data["file"])
@@ -217,12 +217,9 @@ class Downloader:
                             data = json.loads(await metadata.readline())
                             if not data["success"]:
                                 log.error(
-                                    "%s: setting metadata failed;"
-                                    " error messages:\n\n%s",
+                                    "%s: setting metadata failed:%s",
                                     r.downloadable.path,
-                                    textwrap.indent(
-                                        "".join(data["error-messages"]), " " * 4
-                                    ),
+                                    format_errors(data["error-messages"]),
                                 )
                             else:
                                 log.info("Set metadata on %s", r.downloadable.path)
@@ -288,3 +285,12 @@ async def open_git_annex(*args: str, path: Optional[Path] = None) -> TextProcess
         cwd=str(path),  # trio-typing says this has to be a string.
     )
     return TextProcess(p, name=args[0])
+
+
+def format_errors(messages: List[str]) -> str:
+    if not messages:
+        return " <no error message>"
+    elif len(messages) == 1:
+        return " " + messages[0]
+    else:
+        return "\n\n" + textwrap.indent("".join(messages), " " * 4) + "\n"
