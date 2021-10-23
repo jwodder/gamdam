@@ -28,7 +28,7 @@ def formattable(s: str) -> str:
     "repo",
     type=click.Path(file_okay=False, path_type=Path),
     default=os.curdir,
-    help="Git Annex repository to operate in",
+    help="git-annex repository to operate in",
 )
 @click.option(
     "-F",
@@ -41,7 +41,7 @@ def formattable(s: str) -> str:
     "--jobs",
     type=int,
     default=None,
-    help="Number of jobs for `git-annex addurl` to use",
+    help="Number of jobs for `git-annex addurl` to use  [default: one per CPU]",
 )
 @click.option(
     "-l",
@@ -81,6 +81,16 @@ def main(
     no_save_on_fail: bool,
     failures: Optional[TextIO],
 ) -> None:
+    """
+    Git-Annex Mass Downloader and Metadata-er
+
+    ``gamdam`` reads a series of JSON entries from a file (or from standard
+    input if no file is specified) following the input format described in the
+    README at <https://github.com/jwodder/gamdam>.  It feeds the URLs and
+    output paths to ``git-annex addurl``, and once each file has finished
+    downloading, it attaches any listed metadata and extra URLs using
+    ``git-annex metadata`` and ``git-annex registerurl``, respectively.
+    """
     logging.basicConfig(
         format="%(asctime)s [%(levelname)-8s] %(name)s %(message)s",
         datefmt="%H:%M:%S%z",
