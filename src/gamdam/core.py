@@ -134,9 +134,16 @@ class Downloader:
             async with aclosing(objects):  # type: ignore[type-var]
                 async for obj in objects:
                     path = str(obj.path)
-                    self.in_progress[path] = obj
-                    log.info("Downloading %s to %s", obj.url, path)
-                    await self.addurl.send(f"{obj.url} {path}\n")
+                    if path in self.in_progress:
+                        log.warning(
+                            "Multiple entries encountered downloading to %s;"
+                            " discarding extra",
+                            path,
+                        )
+                    else:
+                        self.in_progress[path] = obj
+                        log.info("Downloading %s to %s", obj.url, path)
+                        await self.addurl.send(f"{obj.url} {path}\n")
                 log.debug("Done feeding URLs to addurl")
 
     async def read_addurl(

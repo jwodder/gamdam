@@ -92,9 +92,13 @@ object has the following fields:
 
 ``path``
     *(required)* A relative path where the contents of the URL should be saved.
-    If a file already exists at this path, ``git-annex`` will try to register
-    the URL as an additional location for the file, failing if the resource at
-    the URL is not the same size as the extant file.
+    If an entry with a given path is encountered while another entry with the
+    same path is being downloaded, the later entry is discarded, and a warning
+    is emitted.
+
+    If a file already exists at a given path, ``git-annex`` will try to
+    register the URL as an additional location for the file, failing if the
+    resource at the URL is not the same size as the extant file.
 
 ``metadata``
     A collection of metadata in the form used by ``git-annex metadata``, i.e.,
@@ -107,7 +111,8 @@ object has the following fields:
     configured git-annex to not track text files, then any text files
     downloaded will not have any alternative URLs registered.
 
-If a given input line is invalid, it is discarded, and a warning is emitted.
+If a given input line is invalid, it is discarded, and an error message is
+emitted.
 
 
 Library Use
