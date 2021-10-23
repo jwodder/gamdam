@@ -11,12 +11,6 @@ def run(session):
 
 
 @nox.session
-def sample(session):
-    session.install(".")
-    session.run("python", "-m", "gamdam.sample", *session.posargs)
-
-
-@nox.session
 def typing(session):
     session.install(".")
     session.install("mypy", "trio-typing[mypy]")
