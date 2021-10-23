@@ -161,7 +161,7 @@ class Downloader:
                         )
                     elif not data["success"]:
                         log.error(
-                            "%s: download failed:\n\n%s",
+                            "%s: download failed:%s",
                             data["file"],
                             format_errors(data["error-messages"]),
                         )
