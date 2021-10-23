@@ -2,9 +2,10 @@ from functools import partial
 import logging
 import os
 from pathlib import Path
+import shlex
 import subprocess
 import sys
-from typing import AsyncIterator, Awaitable, Callable, Optional, TextIO
+from typing import AsyncIterator, Awaitable, Callable, List, Optional, TextIO
 import click
 from click_loglevel import LogLevel
 import trio
@@ -22,6 +23,12 @@ def formattable(s: str) -> str:
 
 
 @click.command()
+@click.option(
+    "--addurl-opts",
+    type=shlex.split,
+    help="Additional options to pass to `git-annex addurl`",
+    metavar="OPTIONS",
+)
 @click.option(
     "-C",
     "--chdir",
@@ -80,6 +87,7 @@ def main(
     message: str,
     no_save_on_fail: bool,
     failures: Optional[TextIO],
+    addurl_opts: Optional[List[str]],
 ) -> None:
     """
     Git-Annex Mass Downloader and Metadata-er
@@ -100,7 +108,7 @@ def main(
     dlfunc: Callable[..., Awaitable[Report]] = download
     if failures is not None:
         dlfunc = partial(dlfunc, subscriber=partial(write_failures, failures))
-    report = trio.run(dlfunc, repo, readfile(infile), jobs)
+    report = trio.run(dlfunc, repo, readfile(infile), jobs, addurl_opts)
     if report.downloaded and save and not (no_save_on_fail and report.failed):
         subprocess.run(
             [

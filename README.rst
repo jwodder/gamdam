@@ -48,6 +48,13 @@ finished downloading, it attaches any listed metadata and extra URLs using
 Options
 -------
 
+--addurl-opts OPTIONS           Extra options to pass to the ``git-annex
+                                addurl`` command.  Note that multiple options &
+                                arguments need to be quoted as a single string,
+                                which must also use proper shell quoting
+                                internally; e.g., ``--addurl-opts="--user-agent
+                                'gamdam via git-annex'"``.
+
 -C DIR, --chdir DIR             The directory in which to download files;
                                 defaults to the current directory.  If the
                                 directory does not exist, it will be created.
@@ -126,6 +133,7 @@ Library Use
         repo: pathlib.Path,
         objects: AsyncIterator[Downloadable],
         jobs: Optional[int] = None,
+        addurl_opts: Optional[List[str]] = None,
         subscriber: Optional[
             Callable[[trio.abc.ReceiveChannel[DownloadResult]], Awaitable]
         ] = None,
@@ -134,7 +142,9 @@ Library Use
 Download the items yielded by the async iterator ``objects`` to the directory
 ``repo`` (which must be part of a git-annex repository) and set their metadata.
 ``jobs`` is the number of parallel jobs for the ``git-annex addurl`` process to
-use; a value of ``None`` means to use one job per CPU core.
+use; a value of ``None`` means to use one job per CPU core.  ``addurl_opts``
+contains any additional arguments to append to the ``git-annex addurl``
+command.
 
 If ``subscriber`` is supplied, it will be called with a
 ``trio.abc.ReceiveChannel`` over which it will be sent a ``DownloadResult``

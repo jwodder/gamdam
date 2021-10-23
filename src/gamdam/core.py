@@ -243,6 +243,7 @@ async def download(
     repo: Path,
     objects: AsyncIterator[Downloadable],
     jobs: Optional[int] = None,
+    addurl_opts: Optional[List[str]] = None,
     subscriber: Optional[
         Callable[[trio.abc.ReceiveChannel[DownloadResult]], Awaitable]
     ] = None,
@@ -256,7 +257,7 @@ async def download(
         "--json",
         "--json-error-messages",
         "--json-progress",
-        "--raw",
+        *(addurl_opts if addurl_opts is not None else []),
         path=repo,
     ) as p:
         dm = Downloader(p, repo)
