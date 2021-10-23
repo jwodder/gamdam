@@ -82,6 +82,11 @@ def download_to_repo(func: Callable[..., AsyncIterator[Downloadable]]) -> Callab
         metavar="TEXT",
     )
     @click.option(
+        "--no-save-on-fail",
+        is_flag=True,
+        help="Don't commit if any files failed to download",
+    )
+    @click.option(
         "--save/--no-save",
         default=True,
         help="Whether to commit the downloaded files when done  [default: --save]",
@@ -95,13 +100,14 @@ def download_to_repo(func: Callable[..., AsyncIterator[Downloadable]]) -> Callab
         jobs: Optional[int],
         save: bool,
         message: str,
+        no_save_on_fail: bool,
         **kwargs: Any
     ) -> None:
         init_logging(log_level)
         objects = func(**kwargs)
         ensure_annex_repo(repo)
         report = trio.run(download, repo, objects, jobs)
-        if report.downloaded and save:
+        if report.downloaded and save and not (no_save_on_fail and report.failed):
             subprocess.run(
                 ["git", "commit", "-m", message.format(downloaded=report.downloaded)],
                 cwd=repo,

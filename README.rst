@@ -63,15 +63,19 @@ Options
                                 values are "``CRITICAL``", "``ERROR``",
                                 "``WARNING``", "``INFO``", "``DEBUG``" (all
                                 case-insensitive) and their Python integer
-                                equivalents.  [default: INFO]
+                                equivalents.  [default: ``INFO``]
 
 -m TEXT, --message TEXT         The commit message to use when saving.  This
                                 may contain a ``{downloaded}`` placeholder
                                 which will be replaced with the number of files
                                 successfully downloaded.
 
+--no-save-on-fail               Don't commit the downloaded files if any files
+                                failed to download
+
 --save, --no-save               Whether to commit the downloaded files once
-                                they've all been downloaded  [default: --save]
+                                they've all been downloaded  [default:
+                                ``--save``]
 
 
 Input Format
