@@ -3,11 +3,17 @@ import logging
 import os
 from pathlib import Path
 import subprocess
-from typing import Any, AsyncIterator, Callable, Optional
+import sys
+from typing import Any, AsyncIterator, Callable, Optional, TextIO
 import click
 from click_loglevel import LogLevel
 import trio
 from .core import Downloadable, download, log
+
+if sys.version_info[:2] >= (3, 10):
+    from contextlib import aclosing
+else:
+    from async_generator import aclosing
 
 
 def ensure_annex_repo(repo: Path) -> None:
@@ -101,19 +107,36 @@ def download_to_repo(func: Callable[..., AsyncIterator[Downloadable]]) -> Callab
         save: bool,
         message: str,
         no_save_on_fail: bool,
+        output: Optional[TextIO] = None,
         **kwargs: Any
     ) -> None:
         init_logging(log_level)
         objects = func(**kwargs)
-        ensure_annex_repo(repo)
-        report = trio.run(download, repo, objects, jobs)
-        if report.downloaded and save and not (no_save_on_fail and report.failed):
-            subprocess.run(
-                ["git", "commit", "-m", message.format(downloaded=report.downloaded)],
-                cwd=repo,
-                check=True,
-            )
-        if report.failed:
-            ctx.exit(1)
+        if output is not None:
+            trio.run(write_items, objects, output)
+        else:
+            ensure_annex_repo(repo)
+            report = trio.run(download, repo, objects, jobs)
+            if report.downloaded and save and not (no_save_on_fail and report.failed):
+                subprocess.run(
+                    [
+                        "git",
+                        "commit",
+                        "-m",
+                        message.format(downloaded=report.downloaded),
+                    ],
+                    cwd=repo,
+                    check=True,
+                )
+            if report.failed:
+                ctx.exit(1)
 
     return wrapped
+
+
+async def write_items(objects: AsyncIterator[Downloadable], output: TextIO) -> None:
+    with output:
+        async with trio.wrap_file(output) as afp:
+            async with aclosing(objects):  # type: ignore[type-var]
+                async for obj in objects:
+                    await afp.write(obj.json() + "\n")

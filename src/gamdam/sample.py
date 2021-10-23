@@ -123,6 +123,12 @@ def main() -> None:
 @click.option(
     "--limit", type=int, default=1000, help="Maximum number of items to download"
 )
+@click.option(
+    "-o",
+    "--output",
+    type=click.File("w"),
+    help="Write items to file instead of downloading",
+)
 @click.argument("category")  # arXiv category code
 def arxiv(category: str, limit: int) -> AsyncIterator[Downloadable]:
     return arxiv_articles(category, limit)
@@ -130,6 +136,12 @@ def arxiv(category: str, limit: int) -> AsyncIterator[Downloadable]:
 
 @main.command()
 @download_to_repo
+@click.option(
+    "-o",
+    "--output",
+    type=click.File("w"),
+    help="Write items to file instead of downloading",
+)
 @click.argument("mtg-set")  # MTG set code as used by Scryfall
 def mtg(mtg_set: str) -> AsyncIterator[Downloadable]:
     return mtgimages(mtg_set)
