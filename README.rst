@@ -1,7 +1,7 @@
-.. image:: http://www.repostatus.org/badges/latest/wip.svg
-    :target: http://www.repostatus.org/#wip
-    :alt: Project Status: WIP — Initial development is in progress, but there
-          has not yet been a stable, usable release suitable for the public.
+.. image:: http://www.repostatus.org/badges/latest/active.svg
+    :target: http://www.repostatus.org/#active
+    :alt: Project Status: Active — The project has reached a stable, usable
+          state and is being actively developed.
 
 .. image:: https://github.com/jwodder/gamdam/workflows/Test/badge.svg?branch=master
     :target: https://github.com/jwodder/gamdam/actions?workflow=Test
@@ -10,11 +10,15 @@
 .. image:: https://codecov.io/gh/jwodder/gamdam/branch/master/graph/badge.svg
     :target: https://codecov.io/gh/jwodder/gamdam
 
+.. image:: https://img.shields.io/pypi/pyversions/gamdam.svg
+    :target: https://pypi.org/project/gamdam/
+
 .. image:: https://img.shields.io/github/license/jwodder/gamdam.svg
     :target: https://opensource.org/licenses/MIT
     :alt: MIT License
 
 `GitHub <https://github.com/jwodder/gamdam>`_
+| `PyPI <https://pypi.org/project/gamdam/>`_
 | `Issues <https://github.com/jwodder/gamdam/issues>`_
 
 ``gamdam`` is the Git-Annex Mass Downloader and Metadata-er.  It takes a stream
@@ -36,7 +40,10 @@ Installation
 <https://pip.pypa.io>`_ for Python 3 (You have pip, right?) to install
 ``gamdam`` and its dependencies::
 
-    python3 -m pip install git+https://github.com/jwodder/gamdam.git
+    python3 -m pip install gamdam
+
+Naturally, ``gamdam`` also requires ``git-annex`` to be installed separately in
+order to run.
 
 
 Usage
