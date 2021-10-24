@@ -3,6 +3,13 @@
     :alt: Project Status: WIP — Initial development is in progress, but there
           has not yet been a stable, usable release suitable for the public.
 
+.. image:: https://github.com/jwodder/gamdam/workflows/Test/badge.svg?branch=master
+    :target: https://github.com/jwodder/gamdam/actions?workflow=Test
+    :alt: CI Status
+
+.. image:: https://codecov.io/gh/jwodder/gamdam/branch/master/graph/badge.svg
+    :target: https://codecov.io/gh/jwodder/gamdam
+
 .. image:: https://img.shields.io/github/license/jwodder/gamdam.svg
     :target: https://opensource.org/licenses/MIT
     :alt: MIT License
