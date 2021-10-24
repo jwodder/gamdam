@@ -1,0 +1,6 @@
+{"item": {"url":"https://archive.org/download/GameBoyProgManVer1.1/GameBoyProgManVer1.1.pdf","path":"programming/gameboy.pdf","metadata":{"title":["GameBoy Programming Manual"]}}, "success": true}
+{"item": {"url": "https://httpbin.org/status/404", "path": "errors/not-found.dat", "extra_urls": ["https://www.example.com/invalid-path"]}, "success": false}
+{"item": {"url":"http://www.softwarepreservation.org/projects/apl/Books/APROGRAMMING%20LANGUAGE","path":"programming/APL.pdf","metadata":{"title":["A Programming Language"]}}, "success": true}
+{"item": {"url": "http://mirrors.ctan.org/info/lshort/english/lshort.pdf", "path": "programming/latex/lshort.pdf", "metadata": {"title": ["The Not So Short Introduction to LaTeX2e"]}, "extra_urls": ["https://tobi.oetiker.ch/lshort/lshort.pdf"]}, "success": true}
+{"item": {"url": "https://httpbin.org/status/500", "path": "errors/server-error.dat", "metadata": {"foo": ["bar"]}}, "success": false}
+{"item": {"url":"https://gutenberg.org/files/1524/1524-0.txt","path":"text/shakespeare/hamlet.txt","metadata":{"title":["Hamlet"]}}, "success": true}
