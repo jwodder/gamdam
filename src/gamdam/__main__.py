@@ -107,8 +107,8 @@ def main(
     ``git-annex metadata`` and ``git-annex registerurl``, respectively.
     """
     logging.basicConfig(
-        format="%(asctime)s [%(levelname)-8s] %(name)s %(message)s",
-        datefmt="%H:%M:%S%z",
+        format="%(asctime)s [%(levelname)-8s] %(name)s: %(message)s",
+        datefmt="%H:%M:%S",
         level=log_level,
     )
     ensure_annex_repo(repo)
