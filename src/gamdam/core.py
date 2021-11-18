@@ -34,7 +34,7 @@ else:
         return obj.__aiter__()
 
 
-log = logging.getLogger("gamdam")
+log = logging.getLogger(__package__)
 
 DEEP_DEBUG = 5
 
