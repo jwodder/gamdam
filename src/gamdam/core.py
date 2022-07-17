@@ -122,8 +122,6 @@ class Downloader:
     async def feed_addurl(self, objects: AsyncIterator[Downloadable]) -> None:
         assert self.addurl.p.stdin is not None
         async with self.addurl.p.stdin:
-            # The "type: ignore" can be removed once
-            # <https://github.com/python-trio/trio-typing/pull/41> is released.
             async with aclosing(objects):  # type: ignore[type-var]
                 async for obj in objects:
                     path = str(obj.path)
