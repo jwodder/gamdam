@@ -11,7 +11,9 @@ import sys
 import textwrap
 from typing import Dict, List, Optional, TypeVar
 import anyio
+from anyio.streams.text import TextReceiveStream, TextSendStream
 from pydantic import AnyHttpUrl, BaseModel, validator
+from .aioutil import LineReceiveStream
 
 if sys.version_info[:2] >= (3, 10):
     # So aiter() can be re-exported without mypy complaining:
@@ -27,8 +29,6 @@ else:
 
 
 log = logging.getLogger(__package__)
-
-DEEP_DEBUG = 5
 
 
 class Downloadable(BaseModel):
@@ -61,10 +61,16 @@ class Report:
 class TextProcess(anyio.abc.AsyncResource):
     p: anyio.abc.Process
     name: str
-    encoding: str = "utf-8"
-    buff: bytes = b""
+    stdin: anyio.abc.ObjectSendStream[str]
+    stdout: anyio.abc.ObjectReceiveStream[str]
+
+    async def chat(self, s: str) -> str:
+        await self.stdin.send(s + "\n")
+        return await self.stdout.receive()
 
     async def aclose(self) -> None:
+        await self.stdin.aclose()
+        await self.stdout.aclose()
         await self.p.aclose()
         if self.p.returncode not in (None, 0):
             log.warning(
@@ -72,44 +78,6 @@ class TextProcess(anyio.abc.AsyncResource):
                 self.name,
                 self.p.returncode,
             )
-
-    async def send(self, s: str) -> None:
-        assert self.p.stdin is not None
-        log.log(DEEP_DEBUG, "Sending to %s command: %r", self.name, s)
-        await self.p.stdin.send(s.encode(self.encoding))
-
-    async def readline(self) -> str:
-        assert self.p.stdout is not None
-        while True:
-            try:
-                i = self.buff.index(b"\n")
-            except ValueError:
-                try:
-                    blob = await self.p.stdout.receive()
-                except anyio.EndOfStream:
-                    # EOF
-                    log.log(DEEP_DEBUG, "%s command reached EOF", self.name)
-                    line = self.buff.decode(self.encoding)
-                    self.buff = b""
-                    log.log(
-                        DEEP_DEBUG, "Decoded line from %s command: %r", self.name, line
-                    )
-                    return line
-                else:
-                    self.buff += blob
-            else:
-                line = self.buff[: i + 1].decode(self.encoding)
-                self.buff = self.buff[i + 1 :]
-                log.log(DEEP_DEBUG, "Decoded line from %s command: %r", self.name, line)
-                return line
-
-    async def __aiter__(self) -> AsyncIterator[str]:
-        while True:
-            line = await self.readline()
-            if line == "":
-                break
-            else:
-                yield line
 
 
 @dataclass
@@ -120,8 +88,7 @@ class Downloader:
     in_progress: dict[str, Downloadable] = field(init=False, default_factory=dict)
 
     async def feed_addurl(self, objects: AsyncIterator[Downloadable]) -> None:
-        assert self.addurl.p.stdin is not None
-        async with self.addurl.p.stdin:
+        async with self.addurl.stdin:
             async with aclosing(objects):  # type: ignore[type-var]
                 async for obj in objects:
                     path = str(obj.path)
@@ -134,7 +101,7 @@ class Downloader:
                     else:
                         self.in_progress[path] = obj
                         log.info("Downloading %s to %s", obj.url, path)
-                        await self.addurl.send(f"{obj.url} {path}\n")
+                        await self.addurl.stdin.send(f"{obj.url} {path}\n")
                 log.debug("Done feeding URLs to addurl")
 
     async def read_addurl(
@@ -143,10 +110,8 @@ class Downloader:
         async with AsyncExitStack() as stack:
             for s in senders:
                 await stack.enter_async_context(s)
-            async with aclosing(
-                aiter(self.addurl)
-            ) as lineiter:  # type: ignore[type-var]
-                async for line in lineiter:
+            async with self.addurl.stdout:
+                async for line in self.addurl.stdout:
                     data = json.loads(line)
                     if "success" not in data:
                         # Progress message
@@ -201,18 +166,17 @@ class Downloader:
                         if not r.success:
                             continue
                         if r.downloadable.metadata:
-                            await metadata.send(
-                                json.dumps(
-                                    {
-                                        "file": str(r.downloadable.path),
-                                        "fields": r.downloadable.metadata,
-                                    }
+                            # TODO: Do something on EOF?
+                            data = json.loads(
+                                await metadata.chat(
+                                    json.dumps(
+                                        {
+                                            "file": str(r.downloadable.path),
+                                            "fields": r.downloadable.metadata,
+                                        }
+                                    )
                                 )
-                                + "\n"
                             )
-                            # TODO: Do something if readline() returns ""
-                            # (signalling EOF)
-                            data = json.loads(await metadata.readline())
                             if not data["success"]:
                                 log.error(
                                     "%s: setting metadata failed:%s",
@@ -226,10 +190,10 @@ class Downloader:
                                 log.info(
                                     "Registering URL %r for %s", u, r.downloadable.path
                                 )
-                                await registerurl.send(f"{r.key} {u}\n")
-                                # TODO: Do something if readline() returns ""
-                                # (signalling EOF)
-                                data = json.loads(await registerurl.readline())
+                                # TODO: Do something on EOF?
+                                data = json.loads(
+                                    await registerurl.chat(f"{r.key} {u}")
+                                )
                                 if not data["success"]:
                                     log.error(
                                         "%s: registering URL %r failed:%s",
@@ -297,7 +261,14 @@ async def open_git_annex(*args: str, path: Optional[Path] = None) -> TextProcess
         stdout=subprocess.PIPE,
         cwd=path,
     )
-    return TextProcess(p, name=args[0])
+    assert p.stdin is not None
+    assert p.stdout is not None
+    return TextProcess(
+        p,
+        name=args[0],
+        stdin=TextSendStream(p.stdin, "utf-8"),
+        stdout=LineReceiveStream(TextReceiveStream(p.stdout, "utf-8")),
+    )
 
 
 def format_errors(messages: list[str]) -> str:
