@@ -9,7 +9,7 @@ import shlex
 import subprocess
 import sys
 import textwrap
-from typing import Optional, TypeVar
+from typing import Dict, List, Optional, TypeVar
 import anyio
 from pydantic import AnyHttpUrl, BaseModel, validator
 
@@ -34,8 +34,8 @@ DEEP_DEBUG = 5
 class Downloadable(BaseModel):
     path: Path
     url: AnyHttpUrl
-    metadata: Optional[dict[str, list[str]]] = None
-    extra_urls: Optional[list[AnyHttpUrl]] = None
+    metadata: Optional[Dict[str, List[str]]] = None
+    extra_urls: Optional[List[AnyHttpUrl]] = None
 
     @validator("path")
     def _no_abs_path(cls, v: Path) -> Path:  # noqa: B902, U100
@@ -48,7 +48,7 @@ class DownloadResult(BaseModel):
     downloadable: Downloadable
     success: bool
     key: Optional[str] = None
-    error_messages: Optional[list[str]] = None
+    error_messages: Optional[List[str]] = None
 
 
 @dataclass
