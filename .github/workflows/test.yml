@@ -35,9 +35,13 @@ jobs:
 
       - name: Install dependencies
         run: |
-          sudo apt-get update && sudo apt-get install -y git-annex
           python -m pip install --upgrade pip wheel
           python -m pip install --upgrade --upgrade-strategy=eager tox
+
+      - name: Install git-annex
+        run: |
+          python -m pip install --upgrade datalad-installer
+          datalad-installer -l DEBUG --sudo ok neurodebian git-annex -m neurodebian
 
       - name: Run tests with coverage
         if: matrix.toxenv == 'py'

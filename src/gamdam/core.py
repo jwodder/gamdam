@@ -196,7 +196,7 @@ class Downloader:
         self, receiver: trio.abc.ReceiveChannel[DownloadResult]
     ) -> None:
         async with await open_git_annex(
-            "registerurl", "--batch", path=self.repo
+            "registerurl", "--batch", "--json", "--json-error-messages", path=self.repo
         ) as registerurl:
             async with await open_git_annex(
                 "metadata",
@@ -236,6 +236,22 @@ class Downloader:
                                     "Registering URL %r for %s", u, r.downloadable.path
                                 )
                                 await registerurl.send(f"{r.key} {u}\n")
+                                # TODO: Do something if readline() returns ""
+                                # (signalling EOF)
+                                data = json.loads(await registerurl.readline())
+                                if not data["success"]:
+                                    log.error(
+                                        "%s: registering URL %r failed:%s",
+                                        r.downloadable.path,
+                                        u,
+                                        format_errors(data["error-messages"]),
+                                    )
+                                else:
+                                    log.info(
+                                        "Registered URL %r for %s",
+                                        u,
+                                        r.downloadable.path,
+                                    )
                     log.debug("Done post-processing metadata")
 
 

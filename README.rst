@@ -20,6 +20,7 @@
 `GitHub <https://github.com/jwodder/gamdam>`_
 | `PyPI <https://pypi.org/project/gamdam/>`_
 | `Issues <https://github.com/jwodder/gamdam/issues>`_
+| `Changelog <https://github.com/jwodder/gamdam/blob/master/CHANGELOG.md>`_
 
 ``gamdam`` is the Git-Annex Mass Downloader and Metadata-er.  It takes a stream
 of JSON Lines describing what to download and what metadata each file has,
@@ -42,8 +43,8 @@ Installation
 
     python3 -m pip install gamdam
 
-Naturally, ``gamdam`` also requires ``git-annex`` to be installed separately in
-order to run.
+``gamdam`` also requires ``git-annex`` v10.20220222 or higher to be installed
+separately in order to run.
 
 
 Usage
