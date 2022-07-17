@@ -14,7 +14,7 @@ and is now only minimally maintained.
 Visit <https://github.com/jwodder/gamdam> for more information.
 """
 
-__version__ = "0.2.0.dev1"
+__version__ = "0.2.0"
 __author__ = "John Thorvald Wodder II"
 __author_email__ = "gamdam@varonathe.org"
 __license__ = "MIT"
