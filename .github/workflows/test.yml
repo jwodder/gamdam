@@ -39,6 +39,7 @@ jobs:
           python -m pip install --upgrade --upgrade-strategy=eager tox
 
       - name: Install git-annex
+        if: matrix.toxenv == 'py'
         run: |
           python -m pip install --upgrade datalad-installer
           datalad-installer -l DEBUG --sudo ok neurodebian git-annex -m neurodebian
