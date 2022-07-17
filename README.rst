@@ -27,12 +27,10 @@ of JSON Lines describing what to download and what metadata each file has,
 downloads them in parallel to a git-annex_ repository, attaches the metadata
 using git-annex's metadata facilities, and commits the results.
 
-This program was written as an experiment/proof-of-concept for a larger
-program.  It is my first time using trio_, so there may be some oddness in the
-code.
+This program was written as an experiment/proof-of-concept for a larger program
+and is now only minimally maintained.
 
 .. _git-annex: https://git-annex.branchable.com
-.. _trio: https://github.com/python-trio/trio
 
 
 Installation
@@ -137,8 +135,8 @@ If a given input line is invalid, it is discarded, and an error message is
 emitted.
 
 
-Library Use
-===========
+Library Usage
+=============
 
 ``gamdam`` can also be used as a Python library.  It exports the following:
 
@@ -150,7 +148,7 @@ Library Use
         jobs: Optional[int] = None,
         addurl_opts: Optional[List[str]] = None,
         subscriber: Optional[
-            Callable[[trio.abc.ReceiveChannel[DownloadResult]], Awaitable]
+            Callable[[anyio.abc.ObjectReceiveStream[DownloadResult]], Coroutine]
         ] = None,
     ) -> Report
 
@@ -161,10 +159,10 @@ use; a value of ``None`` means to use one job per CPU core.  ``addurl_opts``
 contains any additional arguments to append to the ``git-annex addurl``
 command.
 
-If ``subscriber`` is supplied, it will be called with a
-``trio.abc.ReceiveChannel`` over which it will be sent a ``DownloadResult``
-(see below) for each completed download, both successful and failed.  This can
-be used to implement custom post-processing of downloads.
+If ``subscriber`` is supplied, it will be called with an
+``anyio.abc.ObjectReceiveStream`` over which it will be sent a
+``DownloadResult`` (see below) for each completed download, both successful and
+failed.  This can be used to implement custom post-processing of downloads.
 
 .. code:: python
 

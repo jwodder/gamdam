@@ -1,3 +1,5 @@
+from __future__ import annotations
+from collections.abc import AsyncIterator, Callable, Coroutine
 from functools import partial
 import logging
 import os
@@ -5,10 +7,10 @@ from pathlib import Path
 import shlex
 import subprocess
 import sys
-from typing import AsyncIterator, Awaitable, Callable, List, Optional, TextIO
+from typing import Any, Optional, TextIO
+import anyio
 import click
 from click_loglevel import LogLevel
-import trio
 from . import __version__
 from .core import Downloadable, DownloadResult, Report, aiter, download, log
 
@@ -94,7 +96,7 @@ def main(
     message: str,
     no_save_on_fail: bool,
     failures: Optional[TextIO],
-    addurl_opts: Optional[List[str]],
+    addurl_opts: Optional[list[str]],
 ) -> None:
     """
     Git-Annex Mass Downloader and Metadata-er
@@ -112,10 +114,10 @@ def main(
         level=log_level,
     )
     ensure_annex_repo(repo)
-    dlfunc: Callable[..., Awaitable[Report]] = download
+    dlfunc: Callable[..., Coroutine[Any, Any, Report]] = download
     if failures is not None:
         dlfunc = partial(dlfunc, subscriber=partial(write_failures, failures))
-    report = trio.run(dlfunc, repo, readfile(infile), jobs, addurl_opts)
+    report = anyio.run(dlfunc, repo, readfile(infile), jobs, addurl_opts)
     if report.downloaded and save and not (no_save_on_fail and report.failed):
         if (
             subprocess.run(["git", "diff", "--cached", "--quiet"], cwd=repo).returncode
@@ -167,7 +169,7 @@ def ensure_annex_repo(repo: Path) -> None:
 
 
 async def readfile(fp: TextIO) -> AsyncIterator[Downloadable]:
-    async with trio.wrap_file(fp) as afp:
+    async with anyio.wrap_file(fp) as afp:
         async with aclosing(aiter(afp)) as lineiter:  # type: ignore[type-var]
             async for line in lineiter:
                 try:
@@ -179,10 +181,10 @@ async def readfile(fp: TextIO) -> AsyncIterator[Downloadable]:
 
 
 async def write_failures(
-    output: TextIO, receiver: trio.abc.ReceiveChannel[DownloadResult]
+    output: TextIO, receiver: anyio.abc.ObjectReceiveStream[DownloadResult]
 ) -> None:
     with output:
-        async with trio.wrap_file(output) as afp:
+        async with anyio.wrap_file(output) as afp:
             async with receiver:
                 async for r in receiver:
                     if not r.success:

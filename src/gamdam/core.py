@@ -1,4 +1,5 @@
 from __future__ import annotations
+from collections.abc import AsyncIterable, AsyncIterator, Callable, Coroutine
 from contextlib import AsyncExitStack
 from dataclasses import dataclass, field
 import json
@@ -8,18 +9,9 @@ import shlex
 import subprocess
 import sys
 import textwrap
-from typing import (
-    AsyncIterable,
-    AsyncIterator,
-    Awaitable,
-    Callable,
-    Dict,
-    List,
-    Optional,
-    TypeVar,
-)
+from typing import Optional, TypeVar
+import anyio
 from pydantic import AnyHttpUrl, BaseModel, validator
-import trio
 
 if sys.version_info[:2] >= (3, 10):
     # So aiter() can be re-exported without mypy complaining:
@@ -42,8 +34,8 @@ DEEP_DEBUG = 5
 class Downloadable(BaseModel):
     path: Path
     url: AnyHttpUrl
-    metadata: Optional[Dict[str, List[str]]] = None
-    extra_urls: Optional[List[AnyHttpUrl]] = None
+    metadata: Optional[dict[str, list[str]]] = None
+    extra_urls: Optional[list[AnyHttpUrl]] = None
 
     @validator("path")
     def _no_abs_path(cls, v: Path) -> Path:  # noqa: B902, U100
@@ -56,7 +48,7 @@ class DownloadResult(BaseModel):
     downloadable: Downloadable
     success: bool
     key: Optional[str] = None
-    error_messages: Optional[List[str]] = None
+    error_messages: Optional[list[str]] = None
 
 
 @dataclass
@@ -66,8 +58,8 @@ class Report:
 
 
 @dataclass
-class TextProcess(trio.abc.AsyncResource):
-    p: trio.Process
+class TextProcess(anyio.abc.AsyncResource):
+    p: anyio.abc.Process
     name: str
     encoding: str = "utf-8"
     buff: bytes = b""
@@ -84,7 +76,7 @@ class TextProcess(trio.abc.AsyncResource):
     async def send(self, s: str) -> None:
         assert self.p.stdin is not None
         log.log(DEEP_DEBUG, "Sending to %s command: %r", self.name, s)
-        await self.p.stdin.send_all(s.encode(self.encoding))
+        await self.p.stdin.send(s.encode(self.encoding))
 
     async def readline(self) -> str:
         assert self.p.stdout is not None
@@ -92,8 +84,9 @@ class TextProcess(trio.abc.AsyncResource):
             try:
                 i = self.buff.index(b"\n")
             except ValueError:
-                blob = await self.p.stdout.receive_some()
-                if blob == b"":
+                try:
+                    blob = await self.p.stdout.receive()
+                except anyio.EndOfStream:
                     # EOF
                     log.log(DEEP_DEBUG, "%s command reached EOF", self.name)
                     line = self.buff.decode(self.encoding)
@@ -124,7 +117,7 @@ class Downloader:
     addurl: TextProcess
     repo: Path
     report: Report = field(init=False, default_factory=Report)
-    in_progress: Dict[str, Downloadable] = field(init=False, default_factory=dict)
+    in_progress: dict[str, Downloadable] = field(init=False, default_factory=dict)
 
     async def feed_addurl(self, objects: AsyncIterator[Downloadable]) -> None:
         assert self.addurl.p.stdin is not None
@@ -147,7 +140,7 @@ class Downloader:
                 log.debug("Done feeding URLs to addurl")
 
     async def read_addurl(
-        self, senders: List[trio.abc.SendChannel[DownloadResult]]
+        self, senders: list[anyio.abc.ObjectSendStream[DownloadResult]]
     ) -> None:
         async with AsyncExitStack() as stack:
             for s in senders:
@@ -193,7 +186,7 @@ class Downloader:
                 log.debug("Done reading from addurl")
 
     async def add_metadata(
-        self, receiver: trio.abc.ReceiveChannel[DownloadResult]
+        self, receiver: anyio.abc.ObjectReceiveStream[DownloadResult]
     ) -> None:
         async with await open_git_annex(
             "registerurl", "--batch", "--json", "--json-error-messages", path=self.repo
@@ -259,9 +252,9 @@ async def download(
     repo: Path,
     objects: AsyncIterator[Downloadable],
     jobs: Optional[int] = None,
-    addurl_opts: Optional[List[str]] = None,
+    addurl_opts: Optional[list[str]] = None,
     subscriber: Optional[
-        Callable[[trio.abc.ReceiveChannel[DownloadResult]], Awaitable]
+        Callable[[anyio.abc.ObjectReceiveStream[DownloadResult]], Coroutine]
     ] = None,
 ) -> Report:
     async with await open_git_annex(
@@ -277,15 +270,15 @@ async def download(
         path=repo,
     ) as p:
         dm = Downloader(p, repo)
-        async with trio.open_nursery() as nursery:
-            sender: trio.abc.SendChannel[DownloadResult]
-            receiver: trio.abc.ReceiveChannel[DownloadResult]
-            sender, receiver = trio.open_memory_channel(0)
-            all_senders: List[trio.abc.SendChannel[DownloadResult]] = [sender]
+        async with anyio.create_task_group() as nursery:
+            sender: anyio.abc.ObjectSendStream[DownloadResult]
+            receiver: anyio.abc.ObjectReceiveStream[DownloadResult]
+            sender, receiver = anyio.create_memory_object_stream(0)
+            all_senders: list[anyio.abc.ObjectSendStream[DownloadResult]] = [sender]
             if subscriber is not None:
-                sender2: trio.abc.SendChannel[DownloadResult]
-                receiver2: trio.abc.ReceiveChannel[DownloadResult]
-                sender2, receiver2 = trio.open_memory_channel(0)
+                sender2: anyio.abc.ObjectSendStream[DownloadResult]
+                receiver2: anyio.abc.ObjectReceiveStream[DownloadResult]
+                sender2, receiver2 = anyio.create_memory_object_stream(0)
                 all_senders.append(sender2)
                 nursery.start_soon(subscriber, receiver2)
             nursery.start_soon(dm.feed_addurl, objects)
@@ -299,19 +292,17 @@ async def download(
 
 
 async def open_git_annex(*args: str, path: Optional[Path] = None) -> TextProcess:
-    # Note: The syntax for starting an interactable process will change in trio
-    # 0.20.0.
     log.debug("Running git-annex %s", shlex.join(args))
-    p = await trio.open_process(
+    p = await anyio.open_process(
         ["git-annex", *args],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
-        cwd=str(path),  # trio-typing says this has to be a string.
+        cwd=path,
     )
     return TextProcess(p, name=args[0])
 
 
-def format_errors(messages: List[str]) -> str:
+def format_errors(messages: list[str]) -> str:
     if not messages:
         return " <no error message>"
     elif len(messages) == 1:

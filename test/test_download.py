@@ -6,9 +6,9 @@ from pathlib import Path
 import stat
 import subprocess
 from typing import AsyncIterator, Dict, Iterator, List, cast
+import anyio
 from iterpath import iterpath
 import pytest
-import trio
 from gamdam import Downloadable, DownloadResult, download
 from gamdam.__main__ import readfile
 
@@ -33,7 +33,7 @@ class ResultSorter:
     failed: Dict[Path, Downloadable] = field(default_factory=dict)
 
     async def subscriber(
-        self, receiver: trio.abc.ReceiveChannel[DownloadResult]
+        self, receiver: anyio.abc.ObjectReceiveStream[DownloadResult]
     ) -> None:
         async with receiver:
             async for r in receiver:
@@ -71,7 +71,7 @@ def test_download_successful(annex_path: Path) -> None:
     with (DATA_DIR / "successful.jsonl").open() as fp:
         items = [Downloadable.parse_raw(line) for line in fp]
         fp.seek(0)
-        report = trio.run(
+        report = anyio.run(
             partial(download, subscriber=sorter.subscriber),
             annex_path,
             readfile(fp),
@@ -108,7 +108,7 @@ def test_download_mixed(annex_path: Path) -> None:
         for i in items:
             yield i
 
-    report = trio.run(
+    report = anyio.run(
         partial(download, subscriber=sorter.subscriber),
         annex_path,
         ayielder(),
