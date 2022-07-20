@@ -1,5 +1,5 @@
 from __future__ import annotations
-from collections.abc import AsyncIterable, AsyncIterator, Callable, Coroutine
+from collections.abc import AsyncIterable, AsyncIterator
 from contextlib import AsyncExitStack
 from dataclasses import dataclass, field
 import json
@@ -215,9 +215,7 @@ async def download(
     objects: AsyncIterator[Downloadable],
     jobs: Optional[int] = None,
     addurl_opts: Optional[list[str]] = None,
-    subscriber: Optional[
-        Callable[[anyio.abc.ObjectReceiveStream[DownloadResult]], Coroutine]
-    ] = None,
+    subscriber: Optional[anyio.abc.ObjectSendStream[DownloadResult]] = None,
 ) -> Report:
     async with await open_git_annex(
         "addurl",
@@ -238,11 +236,7 @@ async def download(
             sender, receiver = anyio.create_memory_object_stream(0)
             all_senders: list[anyio.abc.ObjectSendStream[DownloadResult]] = [sender]
             if subscriber is not None:
-                sender2: anyio.abc.ObjectSendStream[DownloadResult]
-                receiver2: anyio.abc.ObjectReceiveStream[DownloadResult]
-                sender2, receiver2 = anyio.create_memory_object_stream(0)
-                all_senders.append(sender2)
-                nursery.start_soon(subscriber, receiver2)
+                all_senders.append(subscriber)
             nursery.start_soon(dm.feed_addurl, objects)
             nursery.start_soon(dm.read_addurl, all_senders)
             nursery.start_soon(dm.add_metadata, receiver)

@@ -147,9 +147,7 @@ Library Usage
         objects: AsyncIterator[Downloadable],
         jobs: Optional[int] = None,
         addurl_opts: Optional[List[str]] = None,
-        subscriber: Optional[
-            Callable[[anyio.abc.ObjectReceiveStream[DownloadResult]], Coroutine]
-        ] = None,
+        subscriber: Optional[anyio.abc.ObjectSendStream[DownloadResult]] = None,
     ) -> Report
 
 Download the items yielded by the async iterator ``objects`` to the directory
@@ -159,10 +157,9 @@ use; a value of ``None`` means to use one job per CPU core.  ``addurl_opts``
 contains any additional arguments to append to the ``git-annex addurl``
 command.
 
-If ``subscriber`` is supplied, it will be called with an
-``anyio.abc.ObjectReceiveStream`` over which it will be sent a
-``DownloadResult`` (see below) for each completed download, both successful and
-failed.  This can be used to implement custom post-processing of downloads.
+If ``subscriber`` is supplied, it will be sent a ``DownloadResult`` (see below)
+for each completed download, both successful and failed.  This can be used to
+implement custom post-processing of downloads.
 
 .. code:: python
 

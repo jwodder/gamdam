@@ -1,5 +1,4 @@
 from dataclasses import dataclass, field
-from functools import partial
 import json
 import os
 from pathlib import Path
@@ -9,7 +8,7 @@ from typing import AsyncIterator, Dict, Iterator, List, cast
 import anyio
 from iterpath import iterpath
 import pytest
-from gamdam import Downloadable, DownloadResult, download
+from gamdam import Downloadable, DownloadResult, Report, download
 from gamdam.__main__ import readfile
 
 DATA_DIR = Path(__file__).with_name("data")
@@ -68,14 +67,17 @@ def get_annex_urls(repo: Path, fpath: Path) -> List[str]:
 
 def test_download_successful(annex_path: Path) -> None:
     sorter = ResultSorter()
+
+    async def runner(repo: Path, objects: AsyncIterator[Downloadable]) -> Report:
+        async with anyio.create_task_group() as tg:
+            sender, receiver = anyio.create_memory_object_stream(0)
+            tg.start_soon(sorter.subscriber, receiver)
+            return await download(repo, objects, subscriber=sender)
+
     with (DATA_DIR / "successful.jsonl").open() as fp:
         items = [Downloadable.parse_raw(line) for line in fp]
         fp.seek(0)
-        report = anyio.run(
-            partial(download, subscriber=sorter.subscriber),
-            annex_path,
-            readfile(fp),
-        )
+        report = anyio.run(runner, annex_path, readfile(fp))
     assert report.downloaded == len(items)
     assert report.failed == 0
     assert sorter.successful == {dl.path: dl for dl in items}
@@ -108,11 +110,13 @@ def test_download_mixed(annex_path: Path) -> None:
         for i in items:
             yield i
 
-    report = anyio.run(
-        partial(download, subscriber=sorter.subscriber),
-        annex_path,
-        ayielder(),
-    )
+    async def runner(repo: Path, objects: AsyncIterator[Downloadable]) -> Report:
+        async with anyio.create_task_group() as tg:
+            sender, receiver = anyio.create_memory_object_stream(0)
+            tg.start_soon(sorter.subscriber, receiver)
+            return await download(repo, objects, subscriber=sender)
+
+    report = anyio.run(runner, annex_path, ayielder())
     assert sorter == expected
     assert report.downloaded == len(expected.successful)
     assert report.failed == len(expected.failed)

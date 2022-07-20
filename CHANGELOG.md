@@ -1,3 +1,8 @@
+v0.3.0 (in development)
+-----------------------
+- The `subscriber` argument to `download()` is now an optional
+  `anyio.abc.ObjectSendStream[DownloadResult]`
+
 v0.2.0 (2022-07-17)
 -------------------
 - Update for changes to the `registerurl` command in git-annex 10.20220222
