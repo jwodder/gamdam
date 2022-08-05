@@ -1,5 +1,5 @@
-v0.3.0 (in development)
------------------------
+v0.3.0 (2022-08-05)
+-------------------
 - The `subscriber` argument to `download()` is now an optional
   `anyio.abc.ObjectSendStream[DownloadResult]`
 
