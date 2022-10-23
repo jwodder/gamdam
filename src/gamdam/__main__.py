@@ -163,7 +163,7 @@ def ensure_annex_repo(repo: Path) -> None:
         check=True,
     )
     assert isinstance(r.stdout, str)
-    if not Path(r.stdout.strip(), "annex").exists():
+    if not Path(repo, r.stdout.strip(), "annex").exists():
         log.info("Repository is not a git-annex repository; initializing ...")
         subprocess.run(["git-annex", "init"], cwd=repo, check=True)
 

@@ -1,3 +1,8 @@
+v0.4.0 (in development)
+-----------------------
+- Fix a minor bug that could cause `git-annex init` to be run in an
+  already-initialized git-annex repository
+
 v0.3.0 (2022-08-05)
 -------------------
 - The `subscriber` argument to `download()` is now an optional
