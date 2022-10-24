@@ -190,17 +190,8 @@ async def download_with_failures(
 ) -> Report:
     async with anyio.create_task_group() as nursery:
         sender, receiver = anyio.create_memory_object_stream(0, DownloadResult)
-        report_sender, report_receiver = anyio.create_memory_object_stream(1, Report)
-
-        async def download_report() -> None:
-            async with report_sender:
-                report = await download(repo, objects, jobs, addurl_opts, sender)
-                await report_sender.send(report)
-
-        nursery.start_soon(download_report)
         nursery.start_soon(write_failures, failures, receiver)
-        async with report_receiver:
-            return await report_receiver.receive()
+        return await download(repo, objects, jobs, addurl_opts, sender)
 
 
 async def write_failures(
