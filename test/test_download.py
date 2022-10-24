@@ -96,7 +96,7 @@ def test_download_mixed(annex_path: Path) -> None:
     items: List[Downloadable] = []
     expected = ResultSorter()
 
-    with (DATA_DIR / "mixed.jsonl").open() as fp:
+    with (DATA_DIR / "mixed-meta.jsonl").open() as fp:
         for line in fp:
             data = json.loads(line)
             item = Downloadable.parse_obj(data["item"])

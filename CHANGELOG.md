@@ -1,7 +1,8 @@
-v0.4.0 (in development)
+v0.3.1 (in development)
 -----------------------
 - Fix a minor bug that could cause `git-annex init` to be run in an
   already-initialized git-annex repository
+- Fix `--failures` option (broken in 0.3.0)
 
 v0.3.0 (2022-08-05)
 -------------------

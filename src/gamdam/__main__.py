@@ -1,13 +1,12 @@
 from __future__ import annotations
-from collections.abc import AsyncIterator, Callable, Coroutine
-from functools import partial
+from collections.abc import AsyncIterator
 import logging
 import os
 from pathlib import Path
 import shlex
 import subprocess
 import sys
-from typing import Any, Optional, TextIO
+from typing import Optional, TextIO
 import anyio
 import click
 from click_loglevel import LogLevel
@@ -114,10 +113,12 @@ def main(
         level=log_level,
     )
     ensure_annex_repo(repo)
-    dlfunc: Callable[..., Coroutine[Any, Any, Report]] = download
-    if failures is not None:
-        dlfunc = partial(dlfunc, subscriber=partial(write_failures, failures))
-    report = anyio.run(dlfunc, repo, readfile(infile), jobs, addurl_opts)
+    if failures is None:
+        report = anyio.run(download, repo, readfile(infile), jobs, addurl_opts)
+    else:
+        report = anyio.run(
+            download_with_failures, repo, readfile(infile), jobs, addurl_opts, failures
+        )
     if report.downloaded and save and not (no_save_on_fail and report.failed):
         if (
             subprocess.run(["git", "diff", "--cached", "--quiet"], cwd=repo).returncode
@@ -178,6 +179,28 @@ async def readfile(fp: TextIO) -> AsyncIterator[Downloadable]:
                     log.exception("Invalid input line: %r; discarding", line)
                 else:
                     yield dl
+
+
+async def download_with_failures(
+    repo: Path,
+    objects: AsyncIterator[Downloadable],
+    jobs: Optional[int],
+    addurl_opts: Optional[list[str]],
+    failures: TextIO,
+) -> Report:
+    async with anyio.create_task_group() as nursery:
+        sender, receiver = anyio.create_memory_object_stream(0, DownloadResult)
+        report_sender, report_receiver = anyio.create_memory_object_stream(1, Report)
+
+        async def download_report() -> None:
+            async with report_sender:
+                report = await download(repo, objects, jobs, addurl_opts, sender)
+                await report_sender.send(report)
+
+        nursery.start_soon(download_report)
+        nursery.start_soon(write_failures, failures, receiver)
+        async with report_receiver:
+            return await report_receiver.receive()
 
 
 async def write_failures(
