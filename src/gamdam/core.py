@@ -188,7 +188,9 @@ class Downloader:
                         if r.key is not None:
                             for u in r.downloadable.extra_urls or []:
                                 log.info(
-                                    "Registering URL %r for %s", u, r.downloadable.path
+                                    "Registering URL %r for %s",
+                                    str(u),
+                                    r.downloadable.path,
                                 )
                                 # TODO: Do something on EOF?
                                 data = json.loads(
@@ -198,13 +200,13 @@ class Downloader:
                                     log.error(
                                         "%s: registering URL %r failed:%s",
                                         r.downloadable.path,
-                                        u,
+                                        str(u),
                                         format_errors(data["error-messages"]),
                                     )
                                 else:
                                     log.info(
                                         "Registered URL %r for %s",
-                                        u,
+                                        str(u),
                                         r.downloadable.path,
                                     )
                     log.debug("Done post-processing metadata")

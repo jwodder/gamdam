@@ -1,3 +1,7 @@
+v0.3.2 (in development)
+-----------------------
+- Fix how URLs set with `git-annex registerurl` are displayed in log messages
+
 v0.3.1 (2022-10-24)
 -------------------
 - Fix a minor bug that could cause `git-annex init` to be run in an
