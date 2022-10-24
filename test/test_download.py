@@ -62,10 +62,13 @@ def get_annex_urls(repo: Path, fpath: Path) -> List[str]:
     (web,) = [
         src for src in json.loads(r.stdout)["whereis"] if src["description"] == "web"
     ]
-    return cast(List[str], web["urls"])
+    return cast(List[str], sorted(web["urls"]))
 
 
-def test_download_successful(annex_path: Path) -> None:
+@pytest.mark.parametrize(
+    "infile", ["simple.jsonl", "metadata.jsonl", "extra-urls.jsonl", "successful.jsonl"]
+)
+def test_download_successful(annex_path: Path, infile: str) -> None:
     sorter = ResultSorter()
 
     async def runner(repo: Path, objects: AsyncIterator[Downloadable]) -> Report:
@@ -74,7 +77,7 @@ def test_download_successful(annex_path: Path) -> None:
             tg.start_soon(sorter.subscriber, receiver)
             return await download(repo, objects, subscriber=sender)
 
-    with (DATA_DIR / "successful.jsonl").open() as fp:
+    with (DATA_DIR / infile).open() as fp:
         items = [Downloadable.parse_raw(line) for line in fp]
         fp.seek(0)
         report = anyio.run(runner, annex_path, readfile(fp))
@@ -87,7 +90,7 @@ def test_download_successful(annex_path: Path) -> None:
         md = get_annex_metadata(annex_path, dl.path)
         for k, v in (dl.metadata or {}).items():
             assert md.get(k) == v
-        expected_urls = [dl.url] + (dl.extra_urls or [])
+        expected_urls = sorted(map(str, [dl.url] + (dl.extra_urls or [])))
         assert get_annex_urls(annex_path, dl.path) == expected_urls
 
 
