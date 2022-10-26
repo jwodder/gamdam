@@ -2,6 +2,7 @@ v0.3.2 (in development)
 -----------------------
 - Fix how URLs set with `git-annex registerurl` are displayed in log messages
 - Support Python 3.11
+- Improve formatting of certain multiline git-annex error messages
 
 v0.3.1 (2022-10-24)
 -------------------

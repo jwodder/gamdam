@@ -273,4 +273,12 @@ def format_errors(messages: list[str]) -> str:
     elif len(messages) == 1:
         return " " + messages[0]
     else:
-        return "\n\n" + textwrap.indent("".join(messages), " " * 4) + "\n"
+        return (
+            "\n\n"
+            + textwrap.indent("".join(map(ensure_newline, messages)), " " * 4)
+            + "\n"
+        )
+
+
+def ensure_newline(s: str) -> str:
+    return s + "\n" if not s.endswith("\n") else s
