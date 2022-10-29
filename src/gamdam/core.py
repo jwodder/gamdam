@@ -165,27 +165,27 @@ class Downloader:
                     async for r in receiver:
                         if not r.success:
                             continue
-                        if r.downloadable.metadata:
-                            # TODO: Do something on EOF?
-                            data = json.loads(
-                                await metadata.chat(
-                                    json.dumps(
-                                        {
-                                            "file": str(r.downloadable.path),
-                                            "fields": r.downloadable.metadata,
-                                        }
+                        if r.key is not None:
+                            if r.downloadable.metadata:
+                                # TODO: Do something on EOF?
+                                data = json.loads(
+                                    await metadata.chat(
+                                        json.dumps(
+                                            {
+                                                "key": r.key,
+                                                "fields": r.downloadable.metadata,
+                                            }
+                                        )
                                     )
                                 )
-                            )
-                            if not data["success"]:
-                                log.error(
-                                    "%s: setting metadata failed:%s",
-                                    r.downloadable.path,
-                                    format_errors(data["error-messages"]),
-                                )
-                            else:
-                                log.info("Set metadata on %s", r.downloadable.path)
-                        if r.key is not None:
+                                if not data["success"]:
+                                    log.error(
+                                        "%s: setting metadata failed:%s",
+                                        r.downloadable.path,
+                                        format_errors(data["error-messages"]),
+                                    )
+                                else:
+                                    log.info("Set metadata on %s", r.downloadable.path)
                             for u in r.downloadable.extra_urls or []:
                                 log.info(
                                     "Registering URL %r for %s",
@@ -209,6 +209,12 @@ class Downloader:
                                         str(u),
                                         r.downloadable.path,
                                     )
+                        elif r.downloadable.metadata or r.downloadable.extra_urls:
+                            log.warning(
+                                "Cannot set metadata for %s as it was not"
+                                " assigned a key",
+                                r.downloadable.path,
+                            )
                     log.debug("Done post-processing metadata")
 
 
