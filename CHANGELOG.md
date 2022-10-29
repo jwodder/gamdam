@@ -3,8 +3,9 @@ v0.3.2 (in development)
 - Fix how URLs set with `git-annex registerurl` are displayed in log messages
 - Support Python 3.11
 - Improve formatting of certain multiline git-annex error messages
-- Fix an issue with setting metadata on Windows or in an unlocked branch
-    - Metadata is no longer set on files that aren't annexed
+- Get tests to pass on macOS and Windows
+    - Fix an issue with setting metadata on Windows or in an unlocked branch
+        - Metadata is no longer set on files that aren't annexed
 - Warn if metadata or URLs couldn't be attached to a downloaded file due to the
   file not being assigned a git-annex key
 
