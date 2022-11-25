@@ -17,14 +17,14 @@ from .aioutil import LineReceiveStream
 
 if sys.version_info[:2] >= (3, 10):
     # So aiter() can be re-exported without mypy complaining:
-    from builtins import aiter as aiter
+    from builtins import aiter as aiter  # noqa: A001
     from contextlib import aclosing
 else:
     from async_generator import aclosing
 
     T = TypeVar("T")
 
-    def aiter(obj: AsyncIterable[T]) -> AsyncIterator[T]:
+    def aiter(obj: AsyncIterable[T]) -> AsyncIterator[T]:  # noqa: A001
         return obj.__aiter__()
 
 
