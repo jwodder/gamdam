@@ -66,6 +66,8 @@ jobs:
       - name: Install git-annex (Windows)
         if: matrix.toxenv == 'py' && startsWith(matrix.os, 'windows')
         run: datalad-installer -l DEBUG --sudo ok git-annex -m datalad/git-annex:release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run tests with coverage
         if: matrix.toxenv == 'py'
