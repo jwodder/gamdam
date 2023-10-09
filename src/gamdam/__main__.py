@@ -56,8 +56,9 @@ def formattable(s: str) -> str:
     "-l",
     "--log-level",
     type=LogLevel(),
-    default=logging.INFO,
-    help="Set logging level  [default: INFO]",
+    default="INFO",
+    help="Set logging level",
+    show_default=True,
 )
 @click.option(
     "-m",
