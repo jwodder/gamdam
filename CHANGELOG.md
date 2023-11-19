@@ -2,6 +2,7 @@ v0.5.0 (in development)
 -----------------------
 - Migrated from setuptools to hatch
 - Update for Pydantic v2
+- Update for anyio v4
 
 v0.4.0 (2022-10-29)
 -------------------

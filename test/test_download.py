@@ -73,7 +73,7 @@ def test_download_successful(annex_path: Path, infile: str) -> None:
 
     async def runner(repo: Path, objects: AsyncIterator[Downloadable]) -> Report:
         async with anyio.create_task_group() as tg:
-            sender, receiver = anyio.create_memory_object_stream(0)
+            sender, receiver = anyio.create_memory_object_stream[DownloadResult](0)
             tg.start_soon(sorter.subscriber, receiver)
             return await download(repo, objects, subscriber=sender)
 
@@ -115,7 +115,7 @@ def test_download_mixed(annex_path: Path) -> None:
 
     async def runner(repo: Path, objects: AsyncIterator[Downloadable]) -> Report:
         async with anyio.create_task_group() as tg:
-            sender, receiver = anyio.create_memory_object_stream(0)
+            sender, receiver = anyio.create_memory_object_stream[DownloadResult](0)
             tg.start_soon(sorter.subscriber, receiver)
             return await download(repo, objects, subscriber=sender)
 

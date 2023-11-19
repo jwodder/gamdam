@@ -240,9 +240,7 @@ async def download(
     ) as p:
         dm = Downloader(p, repo)
         async with anyio.create_task_group() as nursery:
-            sender: anyio.abc.ObjectSendStream[DownloadResult]
-            receiver: anyio.abc.ObjectReceiveStream[DownloadResult]
-            sender, receiver = anyio.create_memory_object_stream(0)
+            sender, receiver = anyio.create_memory_object_stream[DownloadResult](0)
             all_senders: list[anyio.abc.ObjectSendStream[DownloadResult]] = [sender]
             if subscriber is not None:
                 all_senders.append(subscriber)

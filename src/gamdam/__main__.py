@@ -190,7 +190,7 @@ async def download_with_failures(
     failures: TextIO,
 ) -> Report:
     async with anyio.create_task_group() as nursery:
-        sender, receiver = anyio.create_memory_object_stream(0, DownloadResult)
+        sender, receiver = anyio.create_memory_object_stream[DownloadResult](0)
         nursery.start_soon(write_failures, failures, receiver)
         return await download(repo, objects, jobs, addurl_opts, sender)
 
