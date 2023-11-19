@@ -78,7 +78,7 @@ def test_download_successful(annex_path: Path, infile: str) -> None:
             return await download(repo, objects, subscriber=sender)
 
     with (DATA_DIR / infile).open() as fp:
-        items = [Downloadable.parse_raw(line) for line in fp]
+        items = [Downloadable.model_validate_json(line) for line in fp]
         fp.seek(0)
         report = anyio.run(runner, annex_path, readfile(fp))
     assert report.downloaded == len(items)
@@ -102,7 +102,7 @@ def test_download_mixed(annex_path: Path) -> None:
     with (DATA_DIR / "mixed-meta.jsonl").open() as fp:
         for line in fp:
             data = json.loads(line)
-            item = Downloadable.parse_obj(data["item"])
+            item = Downloadable.model_validate(data["item"])
             items.append(item)
             if data["success"]:
                 expected.successful[item.path] = item
@@ -129,6 +129,6 @@ def test_download_mixed(annex_path: Path) -> None:
         for k, v in (dl.metadata or {}).items():
             assert md.get(k) == v
         expected_urls = [dl.url] + (dl.extra_urls or [])
-        assert get_annex_urls(annex_path, dl.path) == expected_urls
+        assert get_annex_urls(annex_path, dl.path) == list(map(str, expected_urls))
     for dl in expected.failed.values():
         assert not (annex_path / dl.path).exists()

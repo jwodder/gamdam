@@ -48,7 +48,7 @@ dependencies = [
     "click >= 8.0",
     "click-loglevel ~= 0.5",
     "linesep ~= 0.4",
-    "pydantic ~= 1.7",
+    "pydantic ~= 2.0",
 ]
 
 [project.scripts]

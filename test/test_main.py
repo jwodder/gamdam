@@ -30,7 +30,7 @@ def test_main_mixed_failures(caplog: pytest.LogCaptureFixture, tmp_path: Path) -
     ) in caplog.record_tuples
     assert sorted(
         (
-            Downloadable.parse_raw(line)
+            Downloadable.model_validate_json(line)
             for line in (tmp_path / "failures.txt").read_text().splitlines()
         ),
         key=attrgetter("path"),

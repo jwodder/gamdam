@@ -12,7 +12,7 @@ import textwrap
 from typing import Dict, List, Optional, TypeVar
 import anyio
 from anyio.streams.text import TextReceiveStream, TextSendStream
-from pydantic import AnyHttpUrl, BaseModel, validator
+from pydantic import AnyHttpUrl, BaseModel, field_validator
 from .aioutil import LineReceiveStream
 
 if sys.version_info[:2] >= (3, 10):
@@ -37,8 +37,9 @@ class Downloadable(BaseModel):
     metadata: Optional[Dict[str, List[str]]] = None
     extra_urls: Optional[List[AnyHttpUrl]] = None
 
-    @validator("path")
-    def _no_abs_path(cls, v: Path) -> Path:  # noqa: B902, U100
+    @field_validator("path")
+    @classmethod
+    def _no_abs_path(cls, v: Path) -> Path:
         if v.is_absolute():
             raise ValueError("Download target paths cannot be absolute")
         return v

@@ -175,7 +175,7 @@ async def readfile(fp: TextIO) -> AsyncIterator[Downloadable]:
         async with aclosing(aiter(afp)) as lineiter:  # type: ignore[type-var]
             async for line in lineiter:
                 try:
-                    dl = Downloadable.parse_raw(line)
+                    dl = Downloadable.model_validate_json(line)
                 except ValueError:
                     log.exception("Invalid input line: %r; discarding", line)
                 else:
@@ -203,7 +203,7 @@ async def write_failures(
             async with receiver:
                 async for r in receiver:
                     if not r.success:
-                        await afp.write(r.downloadable.json() + "\n")
+                        await afp.write(r.downloadable.model_dump_json() + "\n")
 
 
 if __name__ == "__main__":
