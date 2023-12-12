@@ -1,8 +1,8 @@
-.. image:: https://www.repostatus.org/badges/latest/inactive.svg
-    :target: https://www.repostatus.org/#inactive
-    :alt: Project Status: Inactive – The project has reached a stable, usable
-          state but is no longer being actively developed; support/maintenance
-          will be provided as time allows.
+.. image:: https://www.repostatus.org/badges/latest/unsupported.svg
+    :target: https://www.repostatus.org/#unsupported
+    :alt: Project Status: Unsupported – The project has reached a stable,
+          usable state but the author(s) have ceased all work on it. A new
+          maintainer may be desired.
 
 .. image:: https://github.com/jwodder/gamdam/actions/workflows/test.yml/badge.svg
     :target: https://github.com/jwodder/gamdam/actions/workflows/test.yml
@@ -29,7 +29,9 @@ downloads them in parallel to a git-annex_ repository, attaches the metadata
 using git-annex's metadata facilities, and commits the results.
 
 This program was written as an experiment/proof-of-concept for a larger program
-and is now only minimally maintained.
+and is no longer maintained.  However, the author has also produced a Rust
+translation of this program at <https://github.com/jwodder/gamdam-rust> which
+is currently being maintained.
 
 .. _git-annex: https://git-annex.branchable.com
 
